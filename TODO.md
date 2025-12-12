@@ -34,6 +34,6 @@
 
 ## Файлы проекта
 
-- `Untitled.ipynb` — генерация и парсинг данных
+- `table_processor.py` — преобразование таблицы из wide в flat формат
 - `store_analytics.ipynb` — основной аналитический notebook
 - `TODO.md` — этот файл
