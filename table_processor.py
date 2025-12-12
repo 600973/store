@@ -26,35 +26,42 @@ def read_wide_table(file_path: str, sheet_name: str = 0) -> pd.DataFrame:
     Returns:
         DataFrame с исходными данными
     """
-    # Читаем с двумя строками заголовка
-    df = pd.read_excel(file_path, sheet_name=sheet_name, header=[0, 1])
+    # Читаем БЕЗ заголовков, обработаем вручную
+    df = pd.read_excel(file_path, sheet_name=sheet_name, header=None)
     return df
 
 
-def parse_headers(df: pd.DataFrame) -> tuple[list, list]:
+def parse_headers(df: pd.DataFrame) -> dict:
     """
-    Парсит мультиуровневые заголовки.
+    Парсит заголовки из первых двух строк.
+
+    Строка 0: [пусто] [пусто] [Магазин 1] [пусто] [пусто] [пусто] [Магазин 2] ...
+    Строка 1: [Название строк] [Тип] [Число чеков] [Количество] [Сумма] [Наценка] [Число чеков] ...
 
     Returns:
-        (список магазинов, список метрик)
+        dict с mapping: {col_index: (store_name, metric_name)}
     """
-    # Заголовки - это MultiIndex с двумя уровнями
-    # Уровень 0: Магазин 1, Магазин 2, ...
-    # Уровень 1: Число чеков, Количество в чеке, ...
+    row_stores = df.iloc[0]  # Первая строка - магазины
+    row_metrics = df.iloc[1]  # Вторая строка - метрики
 
-    stores = []
-    metrics = []
+    # Создаем mapping: индекс колонки -> (магазин, метрика)
+    column_mapping = {}
+    current_store = None
 
-    for col in df.columns:
-        store_name = col[0] if not pd.isna(col[0]) and 'Unnamed' not in str(col[0]) else None
-        metric_name = col[1] if not pd.isna(col[1]) and 'Unnamed' not in str(col[1]) else None
+    # Пропускаем первые 2 колонки (Название строк, Тип)
+    for col_idx in range(2, len(df.columns)):
+        # Проверяем магазин
+        store_val = row_stores.iloc[col_idx]
+        if not pd.isna(store_val) and str(store_val).strip():
+            current_store = str(store_val).strip()
 
-        if store_name and store_name not in stores:
-            stores.append(store_name)
-        if metric_name and metric_name not in metrics:
-            metrics.append(metric_name)
+        # Получаем метрику
+        metric_val = row_metrics.iloc[col_idx]
+        if not pd.isna(metric_val):
+            metric_name = str(metric_val).strip()
+            column_mapping[col_idx] = (current_store, metric_name)
 
-    return stores, metrics
+    return column_mapping
 
 
 def transform_to_flat(df: pd.DataFrame, input_file: str) -> pd.DataFrame:
@@ -62,7 +69,7 @@ def transform_to_flat(df: pd.DataFrame, input_file: str) -> pd.DataFrame:
     Преобразует широкую таблицу в плоскую.
 
     Args:
-        df: исходная таблица с мультиуровневыми заголовками
+        df: исходная таблица
         input_file: путь к входному файлу (для логирования)
 
     Returns:
@@ -71,16 +78,17 @@ def transform_to_flat(df: pd.DataFrame, input_file: str) -> pd.DataFrame:
     print(f"📊 Обработка файла: {input_file}")
     print(f"   Размер исходной таблицы: {df.shape}")
 
-    # Получаем список магазинов и метрик
-    stores, metrics = parse_headers(df)
+    # Парсим заголовки (первые 2 строки)
+    column_mapping = parse_headers(df)
+
+    # Получаем уникальные магазины и метрики
+    stores = sorted(set(store for store, _ in column_mapping.values()))
+    metrics = sorted(set(metric for _, metric in column_mapping.values()))
+
     print(f"   Найдено магазинов: {len(stores)}")
+    print(f"   Магазины: {stores[:3]}...") if len(stores) > 3 else print(f"   Магазины: {stores}")
     print(f"   Найдено метрик: {len(metrics)}")
     print(f"   Метрики: {metrics}")
-
-    # Первая колонка - это индекс (Название строк / Тип)
-    # Берем первую колонку как индекс
-    index_col = df.columns[0]
-    df_index = df[index_col].copy()
 
     # Список для накопления результатов
     result_rows = []
@@ -89,20 +97,22 @@ def transform_to_flat(df: pd.DataFrame, input_file: str) -> pd.DataFrame:
     current_year = None
     current_month = None
 
-    # Проходим по всем строкам
-    for idx, row in df.iterrows():
-        # Получаем значение индексной колонки
-        index_value = df_index.iloc[idx]
+    # Начинаем обработку с 3-й строки (индекс 2), первые 2 - заголовки
+    for row_idx in range(2, len(df)):
+        # Первая колонка (индекс 0) - Название строки (Год/Месяц/Товар)
+        # Вторая колонка (индекс 1) - Тип товара
+        col_name = df.iloc[row_idx, 0]
+        col_type = df.iloc[row_idx, 1]
 
-        # Пропускаем NaN строки
-        if pd.isna(index_value):
+        # Пропускаем пустые строки
+        if pd.isna(col_name):
             continue
 
-        index_str = str(index_value).strip()
+        name_str = str(col_name).strip()
 
         # Проверяем, это год?
-        if index_str.isdigit() and len(index_str) == 4:
-            current_year = int(index_str)
+        if name_str.isdigit() and len(name_str) == 4:
+            current_year = int(name_str)
             current_month = None
             continue
 
@@ -111,31 +121,30 @@ def transform_to_flat(df: pd.DataFrame, input_file: str) -> pd.DataFrame:
             "Январь", "Февраль", "Март", "Апрель", "Май", "Июнь",
             "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"
         ]
-        if index_str in months_ru:
-            current_month = index_str
+        if name_str in months_ru:
+            current_month = name_str
             continue
 
-        # Иначе это строка с товаром
-        # Парсим товар и тип (разделены табуляцией или несколькими пробелами)
-        parts = index_str.split('\t')
-        if len(parts) == 1:
-            # Попробуем разделить по двум или более пробелам
-            parts = [p.strip() for p in index_str.split('  ') if p.strip()]
-
-        if len(parts) >= 2:
-            tovar = parts[0].strip()
-            tip = parts[1].strip()
-        else:
-            # Если не получилось распарсить, пропускаем
-            print(f"⚠️  Не удалось распарсить строку: {index_str}")
-            continue
+        # Иначе это товар
+        tovar = name_str
+        tip = str(col_type).strip() if not pd.isna(col_type) else ""
 
         # Проверяем, что год и месяц определены
         if current_year is None or current_month is None:
             continue
 
-        # Извлекаем данные для каждого магазина
-        for store in stores:
+        # Группируем данные по магазинам
+        store_data = {}
+        for col_idx, (store, metric) in column_mapping.items():
+            value = df.iloc[row_idx, col_idx]
+            value = value if not pd.isna(value) else 0
+
+            if store not in store_data:
+                store_data[store] = {}
+            store_data[store][metric] = value
+
+        # Создаём записи для каждого магазина
+        for store, metrics_dict in store_data.items():
             row_data = {
                 'Год': current_year,
                 'Месяц': current_month,
@@ -143,16 +152,7 @@ def transform_to_flat(df: pd.DataFrame, input_file: str) -> pd.DataFrame:
                 'Тип': tip,
                 'Магазин': store
             }
-
-            # Извлекаем значения метрик для этого магазина
-            for metric in metrics:
-                try:
-                    # Ищем колонку (store, metric)
-                    value = row[(store, metric)]
-                    row_data[metric] = value if not pd.isna(value) else 0
-                except KeyError:
-                    row_data[metric] = 0
-
+            row_data.update(metrics_dict)
             result_rows.append(row_data)
 
     # Создаём итоговый DataFrame
@@ -160,7 +160,8 @@ def transform_to_flat(df: pd.DataFrame, input_file: str) -> pd.DataFrame:
 
     print(f"✅ Преобразование завершено!")
     print(f"   Размер плоской таблицы: {df_flat.shape}")
-    print(f"   Колонки: {list(df_flat.columns)}")
+    if not df_flat.empty:
+        print(f"   Колонки: {list(df_flat.columns)}")
 
     return df_flat
 
