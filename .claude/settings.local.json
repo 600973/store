@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git fetch:*)",
+      "Bash(git checkout:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nRemove writeoffs analysis (method 5) from optimal area calculation\n\nKeep only 4 methods based on available data:\n1. Performance per m²\n2. Non-linear regression\n3. Marginal efficiency\n4. Clustering + benchmarking\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git push)",
+      "Bash(git commit:*)"
+    ]
+  }
+}
