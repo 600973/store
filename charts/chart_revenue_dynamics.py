@@ -10,9 +10,6 @@ class ChartRevenueDynamics(BaseChart):
         super().__init__(chart_id=chart_id, **kwargs)
 
     def get_js_code(self):
-        # Получаем JS код для таблиц и промптов из базового класса
-        table_js = self._generate_table_js()
-
         return f"""
         function update{self.chart_id}() {{
             const data = window.filteredData || window.rawData;
@@ -120,6 +117,4 @@ class ChartRevenueDynamics(BaseChart):
 
             return tableData;
         }}
-
-        {table_js}
         """
