@@ -1,0 +1,1688 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📊 Дашборд аналитики</title>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            transition: padding-right 0.25s ease-in-out;
+        }
+
+        /* Когда панель фильтров открыта – добавляем справа место под неё */
+        body.filters-open {
+            padding-right: 380px;  /* ширина панели + запас, если нужно – подстрой */
+        }
+
+
+        .container {
+            position: relative;
+            max-width: 1800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            transition: all 0.25s ease-in-out;
+        }
+
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 30px;
+            font-size: 2em;
+        }
+
+        /* === КНОПКА ОТКРЫТИЯ ПАНЕЛИ ФИЛЬТРОВ === */
+        .global-filters-toggle {
+            position: fixed;
+            top: 24px;
+            right: 24px;
+            z-index: 1100;
+            padding: 8px 16px;
+            background: #667eea;
+            color: #fff;
+            border: none;
+            border-radius: 999px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+        }
+
+        .global-filters-toggle:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 18px rgba(0,0,0,0.3);
+        }
+
+        /* === КНОПКА OLAP === */
+        .olap-filters-toggle {
+            position: fixed;
+            top: 80px;
+            right: 24px;
+            z-index: 1100;
+            padding: 8px 16px;
+            background: #764ba2;
+            color: #fff;
+            border: none;
+            border-radius: 999px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+        }
+
+        .olap-filters-toggle:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 18px rgba(0,0,0,0.3);
+        }
+
+        .olap-filters-toggle.hidden {
+            opacity: 0;
+            pointer-events: none;
+            transform: translateY(-4px);
+        }
+
+        .global-filters-toggle.hidden {
+            opacity: 0;
+            pointer-events: none;
+            transform: translateY(-4px);
+        }
+
+        /* === ВЫДВИЖНЫЕ ПАНЕЛИ (ОБЩИЕ СТИЛИ) === */
+        .global-filters-panel,
+        .olap-filters-panel {
+            position: fixed;
+            top: 0;
+            right: 0;
+            width: 340px;
+            max-width: 85vw;
+            height: 100vh;
+            background: #ffffff;
+            box-shadow: -4px 0 18px rgba(0,0,0,0.25);
+            transform: translateX(100%);
+            transition: transform 0.25s ease-in-out;
+            z-index: 1090;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
+
+        .global-filters-panel.open,
+        .olap-filters-panel.open {
+            transform: translateX(0);
+        }
+
+        .global-filters-header,
+        .olap-filters-header {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding: 18px 20px 14px 20px;
+            flex-shrink: 0;
+        }
+
+        .global-filters-header span {
+            font-weight: 600;
+            font-size: 15px;
+            color: #1f2933;
+        }
+
+        .global-filters-close,
+        .olap-close-btn {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #6c757d;
+            line-height: 1;
+            padding: 0;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+        }
+
+        .global-filters-close:hover,
+        .olap-close-btn:hover {
+            background: #f8f9fa;
+            color: #495057;
+        }
+
+        .global-filters-reset-all {
+            display: none;
+        }
+
+        /* Глобальная детализация (кнопки Год/Месяц/Неделя/День в панели) */
+        .global-detail-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 6px;
+            margin-bottom: 12px;
+        }
+
+        .global-detail-btn {
+            padding: 6px 12px;
+            border-radius: 999px;
+            border: 1px solid #dee2e6;
+            background: #ffffff;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+            color: #495057;
+            transition: all 0.15s ease;
+        }
+
+        .global-detail-btn:hover {
+            background: #e9ecef;
+        }
+
+        .global-detail-btn.active {
+            background: #667eea;
+            color: #ffffff;
+            border-color: #667eea;
+        }
+
+        /* Внутренняя панель фильтров */
+        .filters-panel,
+        .olap-filters-body {
+            background: #f8f9fa;
+            padding: 16px;
+            border-radius: 10px;
+            border: 1px solid #e9ecef;
+            overflow-y: auto;
+            overflow-x: hidden;
+            flex: 1;
+            margin: 0 20px;
+            max-width: 100%;
+            min-height: 200px;
+        }
+
+        .date-filters {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-bottom: 16px;
+            max-width: 100%;
+            min-width: 0;
+        }
+
+        .date-presets {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-top: 4px;
+        }
+
+        .filter-group[data-filter-key="date"] .filter-reset-btn {
+            display: none;
+        }
+
+        .date-presets-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            align-items: center;
+        }
+
+        .date-presets-label {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.02em;
+            color: #9ca3af;
+            margin-right: 4px;
+        }
+
+        .date-preset-btn {
+            padding: 6px 10px;
+            border-radius: 999px;
+            border: 1px solid #dee2e6;
+            background: #ffffff;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+            color: #495057;
+            transition: all 0.15s ease;
+        }
+
+        .date-preset-btn:hover {
+            background: #e9ecef;
+        }
+
+        .date-preset-btn.active {
+            background: #667eea;
+            color: #ffffff;
+            border-color: #667eea;
+        }
+
+
+        /* ВЕРТИКАЛЬНОЕ РАСПОЛОЖЕНИЕ ФИЛЬТРОВ */
+        .filters-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            margin-bottom: 12px;
+            max-width: 100%;
+        }
+
+        .olap-section {
+            margin-bottom: 14px;
+        }
+
+        .olap-section-title {
+            font-weight: 600;
+            font-size: 13px;
+            color: #495057;
+            margin-bottom: 10px;
+        }
+
+        .filter-group,
+        .olap-filter-group {
+            display: flex;
+            flex-direction: column;
+            max-width: 100%;
+        }
+
+        .filter-group-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+        
+        /* Кнопка управления выбранными значениями */
+        .toggle-selected-btn {
+            padding: 4px 8px;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            background: white;
+            color: #667eea;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        
+        .toggle-selected-btn:hover {
+            background: #f8f9fa;
+            border-color: #667eea;
+        }
+        
+        .toggle-selected-btn.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+        
+        /* Кнопка поиска */
+        .toggle-search-btn {
+            padding: 4px 8px;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            background: white;
+            color: #6c757d;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        
+        .toggle-search-btn:hover {
+            background: #f8f9fa;
+            border-color: #6c757d;
+        }
+        
+        .toggle-search-btn.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+        
+        /* Контейнер поиска */
+        .filter-search-container {
+            display: none;
+            margin-bottom: 8px;
+            position: relative;
+        }
+        
+        .filter-search-container.visible {
+            display: block;
+        }
+        
+        .filter-search-input {
+            width: 100%;
+            padding: 6px 28px 6px 8px;
+            border: 2px solid #dee2e6;
+            border-radius: 6px;
+            font-size: 12px;
+            box-sizing: border-box;
+        }
+        
+        .filter-search-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .filter-search-clear {
+            position: absolute;
+            right: 6px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: #6c757d;
+            font-size: 16px;
+            cursor: pointer;
+            padding: 2px 6px;
+            line-height: 1;
+            display: none;
+        }
+        
+        .filter-search-clear:hover {
+            color: #dc3545;
+        }
+        
+        .filter-search-container.has-text .filter-search-clear {
+            display: block;
+        }
+        
+        /* Контейнер выбранных значений */
+        .selected-values-container {
+            display: none;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 8px;
+            padding: 8px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            border: 1px solid #e9ecef;
+            max-height: 120px;
+            overflow-y: auto;
+        }
+        
+        .selected-values-container.visible {
+            display: flex;
+        }
+        
+        .selected-value-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 8px;
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 999px;
+            font-size: 12px;
+            color: #495057;
+        }
+        
+        .selected-value-remove {
+            background: none;
+            border: none;
+            color: #dc3545;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            padding: 0;
+            line-height: 1;
+            width: 16px;
+            height: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .selected-value-remove:hover {
+            color: #c82333;
+        }
+
+        .filter-group label,
+        .olap-filter-group label {
+            font-weight: 600;
+            color: #495057;
+            font-size: 13px;
+        }
+
+        .filter-group-inner {
+            min-width: 0;
+        }
+
+        .filter-group-inner label {
+            font-weight: 500;
+            color: #6b7280;
+            font-size: 12px;
+            margin-bottom: 4px;
+        }
+
+        .filter-group select,
+        .filter-group input,
+        .olap-filter-group select {
+            padding: 8px;
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            background: white;
+            font-size: 13px;
+            width: 100%;
+            max-width: 100%;
+            box-sizing: border-box;
+            min-width: 0;
+            min-height: 38px;
+        }
+        
+        /* Жесткое ограничение высоты для множественных select */
+        .filter-group select[multiple],
+        .olap-filter-group select[multiple] {
+            max-height: 150px;
+            overflow-y: auto;
+        }
+
+        .filter-group select:focus,
+        .filter-group input:focus,
+        .olap-filter-group select:focus {
+            outline: none;
+        }
+
+        .filter-group select:has(option:checked:not([value=""])),
+        .filter-group input[type="date"]:not([value=""]) {
+            border-color: #667eea;
+            border-width: 3px;
+        }
+
+        .filter-group select option:checked {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            font-weight: 700;
+        }
+
+        /* Стили для отображения количества значений в фильтрах */
+        .filter-group select option {
+            color: #495057;
+            font-weight: 600;
+        }
+
+        .filter-reset-btn {
+            border: none;
+            background: #eef2ff;
+            color: #4f46e5;
+            border-radius: 4px;
+            padding: 2px 6px;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .filter-reset-btn:hover {
+            background: #e0e7ff;
+        }
+
+        .filter-reset-btn.active {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            color: white;
+            box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
+        }
+
+        .filter-reset-btn.active:hover {
+            background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+        }
+
+        .filters-footer,
+        .olap-filters-footer {
+            padding: 12px 20px 24px 20px;
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+            flex-shrink: 0;
+            background: #ffffff;
+            border-top: 1px solid #e9ecef;
+        }
+
+        .btn-apply,
+        .btn-reset {
+            padding: 8px 16px;
+            border-radius: 8px;
+            border: none;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-apply {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+        }
+
+        .btn-apply:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 3px 10px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-reset {
+            background: #e9ecef;
+            color: #495057;
+        }
+
+        .btn-reset:hover {
+            background: #dde2e6;
+        }
+
+        .chart-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            transition: all 0.25s ease-in-out;
+            width: 100%;
+            max-width: 100%;
+        }
+
+        .chart-wrapper {
+            position: relative;
+            background: white;
+            border-radius: 10px;
+            padding: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            transition: all 0.25s ease-in-out;
+            min-width: 0; /* ВАЖНО: позволяет flex-элементу сжиматься */
+            overflow-x: auto; /* скролл внутри каждого графика */
+        }
+
+        .plotly-graph-div {
+            transition: all 0.25s ease-in-out !important;
+        }
+
+        .local-filters {
+            background: #f8f9fa;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+        }
+
+        .llm-comment {
+            background: #f0f8ff;
+            border-left: 4px solid #4a90e2;
+            padding: 15px;
+            margin-top: 15px;
+            border-radius: 8px;
+            display: flex;
+            align-items: start;
+            gap: 10px;
+            height: 120px;
+        }
+
+        .llm-comment .llm-icon {
+            font-size: 20px;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+
+        .llm-comment .llm-text {
+            flex: 1;
+            color: #2c3e50;
+            line-height: 1.5;
+            overflow-y: auto;
+            height: 100%;
+            padding-right: 5px;
+            white-space: pre-wrap;
+        }
+
+        .llm-comment .llm-text::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .llm-comment .llm-text::-webkit-scrollbar-track {
+            background: #e1f0ff;
+            border-radius: 4px;
+        }
+
+        .llm-comment .llm-text::-webkit-scrollbar-thumb {
+            background: #4a90e2;
+            border-radius: 4px;
+        }
+
+        .llm-comment .llm-text::-webkit-scrollbar-thumb:hover {
+            background: #3a7bc8;
+        }
+
+        /* Стили для LLM результата */
+        .llm-result {
+            background: #f0f8ff;
+            border-left: 4px solid #4a90e2;
+            padding: 15px;
+            margin-top: 15px;
+            border-radius: 8px;
+            min-height: 120px;
+            max-height: none;
+        }
+        
+        /* Фиксированная высота только для collapsed режима */
+        .llm-result:has(.llm-result-text.collapsed) {
+            height: 180px;
+        }
+
+        .llm-result-header {
+            font-size: 10px;
+            font-weight: 600;
+            color: #4a90e2;
+            margin-bottom: 6px;
+        }
+
+        .llm-result-text {
+            color: #2c3e50;
+            line-height: 1.5;
+            overflow-y: auto;
+            height: calc(100% - 24px);
+            padding-right: 5px;
+            white-space: pre-wrap;
+        }
+        
+        /* Переопределение для full режима */
+        .llm-result-text.full {
+            overflow-y: visible !important;
+            height: auto !important;
+            max-height: none !important;
+        }
+        
+        /* Переопределение для collapsed режима */
+        .llm-result-text.collapsed {
+            max-height: calc(1.6em * var(--max-lines, 5)) !important;
+            height: auto !important;
+            overflow-y: auto !important;
+        }
+
+        .llm-result-text::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .llm-result-text::-webkit-scrollbar-track {
+            background: #e1f0ff;
+            border-radius: 4px;
+        }
+
+        .llm-result-text::-webkit-scrollbar-thumb {
+            background: #4a90e2;
+            border-radius: 4px;
+        }
+
+        .llm-result-text::-webkit-scrollbar-thumb:hover {
+            background: #3a7bc8;
+        }
+
+        /* === КОМБИНИРОВАННОЕ РЕШЕНИЕ ДЛЯ ТАБЛИЦ === */
+        /* Оборачиваем таблицу для предотвращения наложения столбцов */
+        #olap-table-container {
+            width: 100%;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch; /* плавный скролл на iOS */
+        }
+
+        #olap-table,
+        .chart-table {
+            width: 100%;
+            min-width: 1200px; /* минимальная ширина таблицы */
+            border-collapse: collapse;
+            table-layout: auto;
+        }
+
+        #olap-table th,
+        #olap-table td,
+        .chart-table th,
+        .chart-table td {
+            padding: 8px 12px;
+            white-space: nowrap; /* запрет переноса текста */
+            min-width: 50px; /* минимальная ширина для каждого столбца */
+            border: 1px solid #e9ecef;
+            text-align: left;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        #olap-table th,
+        .chart-table th {
+            background: #f8f9fa;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        /* Для очень узких экранов */
+        @media (max-width: 600px) {
+            #olap-table th,
+            #olap-table td,
+            .chart-table th,
+            .chart-table td {
+                font-size: 11px;
+                padding: 6px 8px;
+                min-width: 40px;
+            }
+        }
+
+        /* Дополнительные стили от графиков */
+        {{CHARTS_CSS}}
+
+        @media (max-width: 768px) {
+            .filters-panel {
+                min-height: 150px;
+                padding: 12px;
+            }
+        }
+
+        /* === ВКЛАДКИ === */
+        .tabs-container {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #e9ecef;
+        }
+
+        .tab-btn {
+            padding: 12px 24px;
+            background: transparent;
+            border: none;
+            border-bottom: 3px solid transparent;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            color: #6c757d;
+            transition: all 0.2s ease;
+        }
+
+        .tab-btn:hover {
+            color: #495057;
+            background: #f8f9fa;
+        }
+
+        .tab-btn.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+            transition: all 0.25s ease-in-out;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 Дашборд аналитики персонала</h1>
+
+        <!-- Вкладки -->
+        <div class="tabs-container">
+            <button class="tab-btn active" onclick="switchTab('tab1')">Основная аналитика</button>
+            <!-- <button class="tab-btn" onclick="switchTab('tab2')">OLAP Куб</button> -->
+        </div>
+
+        <!-- Вкладка 1 -->
+        <div id="tab1" class="tab-content active">
+            {{FILTERS_HTML}}
+            {{CHARTS_HTML_TAB1}}
+        </div>
+
+        <!-- Вкладка 2 -->
+        <div id="tab2" class="tab-content">
+            <!-- Кнопка открытия OLAP панели -->
+            <button class="olap-filters-toggle" onclick="toggleOlapFilters()">⚙️ OLAP Настройки</button>
+            
+            <!-- OLAP таблица -->
+            <div id="olap-table-container" style="margin-top: 20px; overflow: auto; max-height: 800px;">
+                <table id="olap-table" class="chart-table">
+                    <thead id="olap-table-head"></thead>
+                    <tbody id="olap-table-body"></tbody>
+                </table>
+            </div>
+            
+            <!-- OLAP панель -->
+            <div id="olap-filters-panel" class="olap-filters-panel">
+                <div class="olap-filters-header">
+                    <button class="olap-close-btn" onclick="toggleOlapFilters()">✕</button>
+                </div>
+                
+                <div class="filters-panel">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px;">
+                        <!-- Фильтры (верх-лево) -->
+                        <div class="filter-group">
+                            <div class="filter-group-header">
+                                <label>🔍 Фильтры</label>
+                            </div>
+                            <div class="filter-group-inner">
+                                <label>Магазин</label>
+                                <select id="olap_filter_magazine" multiple size="3">
+                                    <option value="">Все</option>
+                                </select>
+                            </div>
+                            <div class="filter-group-inner" style="margin-top: 8px;">
+                                <label>Подразделение</label>
+                                <select id="olap_filter_division" multiple size="3">
+                                    <option value="">Все</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <!-- Столбцы (верх-право) -->
+                        <div class="filter-group">
+                            <div class="filter-group-header">
+                                <label>📈 Столбцы</label>
+                            </div>
+                            <div class="filter-group-inner">
+                                <select id="olap_columns">
+                                    <option value="year">Год</option>
+                                    <option value="month">Месяц</option>
+                                    <option value="week" selected>Неделя</option>
+                                    <option value="day">День</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <!-- Строки (низ-лево) -->
+                        <div class="filter-group">
+                            <div class="filter-group-header">
+                                <label>📊 Строки</label>
+                            </div>
+                            <div class="filter-group-inner">
+                                <select id="olap_rows" multiple size="4">
+                                    <option value="Магазин" selected>Магазин</option>
+                                    <option value="Подразделение">Подразделение</option>
+                                    <option value="Отдел">Отдел</option>
+                                    <option value="Должность">Должность</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <!-- Значения (низ-право) -->
+                        <div class="filter-group">
+                            <div class="filter-group-header">
+                                <label>💯 Значения</label>
+                            </div>
+                            <div class="filter-group-inner">
+                                <select id="olap_values" multiple size="4">
+                                    <option value="hired" selected>Принято</option>
+                                    <option value="dismissed" selected>Уволено</option>
+                                    <option value="balance">Баланс</option>
+                                    <option value="headcount">Численность</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="olap-filters-footer">
+                    <button class="btn-apply" onclick="applyOlapFilters()">Применить</button>
+                    <button class="btn-reset" onclick="resetOlapFilters()">Сбросить</button>
+                </div>
+            </div>
+            
+            {{CHARTS_HTML_TAB2}}
+        </div>
+    </div>
+
+    <script>
+        // ============================================================================
+        // ДАННЫЕ
+        // ============================================================================
+        const rawData = {{DATA_JSON}};
+        const promptTemplates = {{PROMPTS_JSON}};
+        
+        // Контекстные данные для AI-анализа
+        {{CONTEXT_DATA_JS}}
+        
+        // Функция для динамического обновления контекста при изменении фильтров
+        function updateAnalysisContext(filteredData, activeFilters) {
+            if (!window.analysisContextData) {
+                console.warn('⚠️ window.analysisContextData не инициализирован');
+                return;
+            }
+            
+            console.log('🔄 Обновление контекста:', {
+                filteredRecords: filteredData.length,
+                totalRecords: rawData.length,
+                activeFilters: activeFilters
+            });
+            
+            // Пересчитываем контекст на основе отфильтрованных данных
+            const totalRecords = rawData.length;
+            const filteredRecords = filteredData.length;
+            const coveragePercent = totalRecords > 0 ? ((filteredRecords / totalRecords) * 100).toFixed(1) : 0;
+            
+            // Подсчитываем ключевые метрики на отфильтрованных данных
+            const activeEmployees = filteredData.filter(row => !row['Дата увольнения']);
+            const currentHeadcount = activeEmployees.length;
+            const totalDismissed = filteredData.filter(row => row['Дата увольнения']).length;
+            const totalHired = filteredData.filter(row => row['Дата приема']).length;
+            
+            const avgHeadcount = (currentHeadcount + totalDismissed) / 2;
+            const turnoverRate = avgHeadcount > 0 ? ((totalDismissed / avgHeadcount) * 100).toFixed(1) : 0;
+            
+            // Баланс найма/увольнений
+            const balance = totalHired - totalDismissed;
+            const balanceStr = balance > 0 ? `Положительный (+${balance} чел)` : (balance < 0 ? `Отрицательный (${balance} чел)` : 'Нулевой');
+            
+            // Топ проблемных подразделений (по текучести)
+            const departmentStats = {};
+            filteredData.forEach(row => {
+                const dept = row['Подразделение'];
+                if (!dept) return;
+                if (!departmentStats[dept]) {
+                    departmentStats[dept] = {dismissed: 0, total: 0};
+                }
+                departmentStats[dept].total++;
+                if (row['Дата увольнения']) {
+                    departmentStats[dept].dismissed++;
+                }
+            });
+            
+            const topProblems = Object.entries(departmentStats)
+                .map(([dept, stats]) => ({
+                    dept,
+                    rate: stats.total > 0 ? (stats.dismissed / stats.total) : 0,
+                    dismissed: stats.dismissed
+                }))
+                .filter(item => item.dismissed > 0)
+                .sort((a, b) => b.rate - a.rate)
+                .slice(0, 3)
+                .map(item => item.dept);
+            
+            // Критические месяцы (месяцы с максимальными увольнениями)
+            const monthlyDismissals = {};
+            filteredData.forEach(row => {
+                if (row.dateFired) {
+                    const monthKey = row.dateFired.toISOString().substring(0, 7); // YYYY-MM
+                    monthlyDismissals[monthKey] = (monthlyDismissals[monthKey] || 0) + 1;
+                }
+            });
+            
+            const criticalMonths = Object.entries(monthlyDismissals)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 3)
+                .map(([month]) => {
+                    const [year, m] = month.split('-');
+                    const monthNames = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек'];
+                    return `${monthNames[parseInt(m) - 1]} ${year}`;
+                });
+            
+            // Критический стаж (период с наибольшими увольнениями)
+            const tenureRanges = {
+                '0-3 мес': 0,
+                '3-6 мес': 0,
+                '6-12 мес': 0,
+                '1-2 года': 0,
+                '2-5 лет': 0,
+                '5+ лет': 0
+            };
+            
+            filteredData.forEach(row => {
+                if (row['Диапазон стажа'] && row['Дата увольнения']) {
+                    const range = row['Диапазон стажа'];
+                    if (tenureRanges.hasOwnProperty(range)) {
+                        tenureRanges[range]++;
+                    }
+                }
+            });
+            
+            const criticalTenure = Object.entries(tenureRanges)
+                .sort((a, b) => b[1] - a[1])
+                .filter(([_, count]) => count > 0)
+                .slice(0, 1)
+                .map(([range]) => range)[0] || 'н/д';
+            
+            // Формируем строку с активными фильтрами
+            let filtersStr = '';
+            const filterLines = [];
+            let hasActiveFilters = false;
+            
+            for (const [key, value] of Object.entries(activeFilters || {})) {
+                if (!value) continue;
+                
+                if (Array.isArray(value)) {
+                    if (value.length === 0) continue;
+                    hasActiveFilters = true;
+                    const valueStr = value.length <= 3 ? value.join(', ') : `${value.slice(0, 3).join(', ')}... (+${value.length - 3})`;
+                    filterLines.push(`• ${key}: ${valueStr}`);
+                } else if (typeof value === 'object' && value.from && value.to) {
+                    hasActiveFilters = true;
+                    filterLines.push(`• ${key}: с ${value.from} по ${value.to}`);
+                } else if (typeof value === 'string' && value.length > 0) {
+                    hasActiveFilters = true;
+                    filterLines.push(`• ${key}: ${value}`);
+                }
+            }
+            
+            if (!hasActiveFilters) {
+                filtersStr = '• Фильтры: не применены (анализируются все данные)';
+            } else {
+                filtersStr = filterLines.join('\n');
+            }
+            
+            // Обновляем контекст для каждого графика
+            for (const chartId in window.analysisContextData) {
+                const oldContext = window.analysisContextData[chartId];
+                
+                // Парсим старый контекст и обновляем разделы фильтров и метрик
+                let updatedContext = oldContext;
+                
+                // Обновляем секцию фильтров
+                const filtersSection = `🔍 АКТИВНЫЕ ФИЛЬТРЫ:\n${filtersStr}\n→ Охват выборки: ${filteredRecords} записей из ${totalRecords} общих (${coveragePercent}%)`;
+                
+                updatedContext = updatedContext.replace(
+                    /🔍 АКТИВНЫЕ ФИЛЬТРЫ:[\s\S]*?(?=(?:📊|📈|---|$))/,
+                    filtersSection + '\n\n'
+                );
+                
+                // Обновляем секцию метрик дашборда
+                let metricsLines = [];
+                metricsLines.push(`• Текущая численность: ${currentHeadcount} (на конец периода)`);
+                metricsLines.push(`• Коэффициент текучести за период: ${turnoverRate}%`);
+                if (topProblems.length > 0) {
+                    metricsLines.push(`• Топ проблемных подразделений: ${topProblems.join(', ')}`);
+                }
+                if (criticalMonths.length > 0) {
+                    metricsLines.push(`• Критические периоды увольнений: ${criticalMonths.join(', ')}`);
+                }
+                metricsLines.push(`• Критический период стажа: ${criticalTenure}`);
+                metricsLines.push(`• Баланс найма/увольнений: ${balanceStr}`);
+                
+                const metricsSection = `📊 КЛЮЧЕВЫЕ ПОКАЗАТЕЛИ ДАШБОРДА:\n${metricsLines.join('\n')}`;
+                
+                if (updatedContext.includes('📊 КЛЮЧЕВЫЕ ПОКАЗАТЕЛИ ДАШБОРДА:')) {
+                    // Обновляем существующую секцию
+                    updatedContext = updatedContext.replace(
+                        /📊 КЛЮЧЕВЫЕ ПОКАЗАТЕЛИ ДАШБОРДА:[\s\S]*?(?=(?:📈|---|$))/,
+                        metricsSection + '\n\n'
+                    );
+                    console.log('✅ Метрики обновлены для', chartId);
+                } else {
+                    // Добавляем новую секцию перед разделителем "---"
+                    if (updatedContext.includes('---')) {
+                        updatedContext = updatedContext.replace('---', metricsSection + '\n\n---');
+                    } else {
+                        // Если нет разделителя, добавляем в конец
+                        updatedContext = updatedContext + '\n\n' + metricsSection + '\n\n';
+                    }
+                    console.log('✅ Метрики добавлены для', chartId);
+                }
+                
+                window.analysisContextData[chartId] = updatedContext;
+            }
+            
+            console.log('✅ Контекст обновлен для отфильтрованных данных');
+            
+            // Автоматически обновляем промпты во всех открытых вкладках "Промпт"
+            document.querySelectorAll('.prompt-container').forEach(container => {
+                if (container.style.display !== 'none') {
+                    const chartId = container.id.replace('_prompt', '');
+                    const generateBtn = document.querySelector(`button[onclick="generatePrompt_${chartId}()"]`);
+                    if (generateBtn && typeof window[`generatePrompt_${chartId}`] === 'function') {
+                        window[`generatePrompt_${chartId}`]();
+                    }
+                }
+            });
+        }
+
+        console.log('✅ Загружено записей:', rawData.length);
+
+        // Конвертация дат
+        rawData.forEach(row => {
+            if (row['Дата приема']) {
+                row.dateHired = new Date(row['Дата приема']);
+            }
+            if (row['Дата увольнения']) {
+                row.dateFired = new Date(row['Дата увольнения']);
+            }
+        });
+
+        // ============================================================================
+        // ПЕРЕКЛЮЧЕНИЕ ВКЛАДОК
+        // ============================================================================
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+
+            const selectedTab = document.getElementById(tabId);
+            if (selectedTab) {
+                selectedTab.classList.add('active');
+            }
+
+            event.target.classList.add('active');
+
+            document.querySelectorAll('.global-filters-panel').forEach(panel => {
+                panel.classList.remove('open');
+            });
+            document.querySelectorAll('.global-filters-toggle').forEach(btn => {
+                btn.classList.remove('hidden');
+            });
+            document.body.classList.remove('filters-open');
+
+            localStorage.setItem('activeTab', tabId);
+
+            setTimeout(() => {
+                window.dispatchEvent(new Event('resize'));
+                
+                // Инициализация графиков в активной вкладке
+                const activeTab = document.querySelector('.tab-content.active');
+                if (activeTab && window.Plotly) {
+                    activeTab.querySelectorAll('[id^="chart"]').forEach(chartDiv => {
+                        if (chartDiv.classList.contains('plotly-graph-div')) {
+                            try {
+                                Plotly.Plots.resize(chartDiv);
+                            } catch (e) {}
+                        }
+                        
+                        // Вызываем update функцию для графика
+                        const chartId = chartDiv.id;
+                        const updateFuncName = 'update' + chartId.charAt(0).toUpperCase() + chartId.slice(1);
+                        if (typeof window[updateFuncName] === 'function') {
+                            console.log('Переключение вкладки: вызов', updateFuncName);
+                            setTimeout(() => window[updateFuncName](), 150);
+                        }
+                    });
+                }
+            }, 100);
+        }
+
+        // ============================================================================
+        // ФИЛЬТРЫ (JS-код из Python)
+        // ============================================================================
+        {{FILTERS_JS}}
+
+                // ============================================================================
+        // ПРЕСЕТЫ ДАТ
+        // ============================================================================
+        function formatDateYMD(date) {
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const d = String(date.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        }
+
+        function setDateInputs(startStr, endStr) {
+            const startInput = document.getElementById('startDate');
+            const endInput   = document.getElementById('endDate');
+            if (startInput) startInput.value = startStr;
+            if (endInput)   endInput.value   = endStr;
+        }
+
+        function setDateRangePreset(preset) {
+            const today = new Date();
+            let from, to;
+
+            switch (preset) {
+                // --- Оперативные периоды ---
+                case 'today':
+                    from = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                    to   = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                    break;
+
+                case 'last_7_days':
+                    to   = today;
+                    from = new Date(today);
+                    from.setDate(from.getDate() - 6);
+                    break;
+
+                case 'last_30_days':
+                    to   = today;
+                    from = new Date(today);
+                    from.setDate(from.getDate() - 29);
+                    break;
+
+                // --- Календарные месяцы ---
+                case 'this_month':
+                    from = new Date(today.getFullYear(), today.getMonth(), 1);
+                    to   = today;
+                    break;
+
+                case 'prev_month': {
+                    let year  = today.getFullYear();
+                    let month = today.getMonth() - 1;
+
+                    if (month < 0) {
+                        month = 11;
+                        year -= 1;
+                    }
+
+                    from = new Date(year, month, 1);
+                    to   = new Date(year, month + 1, 0);
+                    break;
+                }
+
+                // --- Годовые ---
+                case 'this_year': {
+                    const year = today.getFullYear();
+                    from = new Date(year, 0, 1);
+                    to   = today;
+                    break;
+                }
+
+                case 'prev_year': {
+                    const year = today.getFullYear() - 1;
+                    from = new Date(year, 0, 1);
+                    to   = new Date(year, 11, 31);
+                    break;
+                }
+
+                default:
+                    return;
+            }
+
+            setDateInputs(formatDateYMD(from), formatDateYMD(to));
+
+            // Подсветка активной кнопки
+            document.querySelectorAll('.date-preset-btn').forEach(btn => {
+                const btnPreset = btn.dataset.datePreset;
+                btn.classList.toggle('active', btnPreset === preset);
+            });
+
+            if (typeof applyFilters === 'function') {
+                applyFilters();
+            }
+        }
+
+
+
+        // ============================================================================
+        // ГЛОБАЛЬНАЯ ДЕТАЛИЗАЦИЯ (для всех графиков)
+        // ============================================================================
+        let globalDetailLevel = 'month';  // по умолчанию Месяц
+
+        /**
+         * Установить глобальный уровень детализации для ВСЕХ графиков.
+         * Вызывается из кнопок в выдвижной панели.
+         */
+        function setGlobalDetailLevel(level) {
+            globalDetailLevel = level;
+
+            // Подсветка кнопок в панели
+            document.querySelectorAll('.global-detail-btn').forEach(btn => {
+                const btnLevel = btn.dataset.level;
+                btn.classList.toggle('active', btnLevel === level);
+            });
+
+            // Для всех графиков вызываем уже существующую логику setDetailLevel
+            if (typeof setDetailLevel === 'function') {
+                document.querySelectorAll('[id^="chart"]').forEach(div => {
+                    const chartId = div.id;
+                    setDetailLevel(chartId, level);
+                });
+            }
+        }
+
+        // ============================================================================
+        // ГРАФИКИ
+        // ============================================================================
+        {{CHARTS_JS}}
+
+        // ============================================================================
+        // OLAP панель
+        // ============================================================================
+        function toggleOlapFilters() {
+            const panel = document.getElementById('olap-filters-panel');
+            const btn   = document.querySelector('.olap-filters-toggle');
+            if (!panel) return;
+
+            panel.classList.toggle('open');
+            const isOpen = panel.classList.contains('open');
+
+            if (btn) {
+                btn.classList.toggle('hidden', isOpen);
+            }
+        }
+
+        function applyOlapFilters() {
+            const rowsSelect = document.getElementById('olap_rows');
+            const colsSelect = document.getElementById('olap_columns');
+            const valuesSelect = document.getElementById('olap_values');
+            
+            const rows = Array.from(rowsSelect.selectedOptions).map(o => o.value);
+            const cols = colsSelect.value;
+            const values = Array.from(valuesSelect.selectedOptions).map(o => o.value);
+            
+            buildOlapTable(rows, cols, values);
+        }
+        
+        function buildOlapTable(rows, cols, values) {
+            const data = rawData;
+            const tableHead = document.getElementById('olap-table-head');
+            const tableBody = document.getElementById('olap-table-body');
+            
+            if (!data || data.length === 0) {
+                tableBody.innerHTML = '<tr><td>Нет данных</td></tr>';
+                return;
+            }
+            
+            // Группировка по строкам и столбцам
+            const pivot = {};
+            const colsSet = new Set();
+            
+            data.forEach(row => {
+                const rowKey = rows.map(r => row[r] || 'Нет данных').join(' | ');
+                
+                let colKey = '';
+                if (cols === 'year' && row.dateHired) colKey = new Date(row.dateHired).getFullYear();
+                else if (cols === 'month' && row.dateHired) {
+                    const d = new Date(row.dateHired);
+                    colKey = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+                } else if (cols === 'week' && row.dateHired) {
+                    const d = new Date(row.dateHired);
+                    const year = d.getFullYear();
+                    const firstDay = new Date(year, 0, 1);
+                    const days = Math.floor((d - firstDay) / (24 * 60 * 60 * 1000));
+                    const week = Math.ceil((days + firstDay.getDay() + 1) / 7);
+                    colKey = year + '-W' + String(week).padStart(2, '0');
+                } else if (cols === 'day' && row.dateHired) {
+                    const d = new Date(row.dateHired);
+                    colKey = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+                }
+                
+                if (!colKey) return;
+                colsSet.add(colKey);
+                
+                if (!pivot[rowKey]) pivot[rowKey] = {};
+                if (!pivot[rowKey][colKey]) pivot[rowKey][colKey] = { hired: 0, dismissed: 0, headcount: 0 };
+                
+                if (row.dateHired) pivot[rowKey][colKey].hired++;
+                if (row.dateFired) pivot[rowKey][colKey].dismissed++;
+                pivot[rowKey][colKey].headcount++;
+            });
+            
+            const colsArray = Array.from(colsSet).sort();
+            
+            // Заголовок
+            let headHtml = '<tr><th>' + rows.join(' | ') + '</th>';
+            colsArray.forEach(col => {
+                values.forEach(val => {
+                    const label = { hired: 'Принято', dismissed: 'Уволено', balance: 'Баланс', headcount: 'Численность' }[val];
+                    headHtml += '<th>' + col + '<br>' + label + '</th>';
+                });
+            });
+            headHtml += '</tr>';
+            tableHead.innerHTML = headHtml;
+            
+            // Тело
+            let bodyHtml = '';
+            Object.keys(pivot).forEach(rowKey => {
+                bodyHtml += '<tr><td>' + rowKey + '</td>';
+                colsArray.forEach(col => {
+                    const cell = pivot[rowKey][col] || { hired: 0, dismissed: 0, headcount: 0 };
+                    values.forEach(val => {
+                        let value = 0;
+                        if (val === 'hired') value = cell.hired;
+                        else if (val === 'dismissed') value = cell.dismissed;
+                        else if (val === 'balance') value = cell.hired - cell.dismissed;
+                        else if (val === 'headcount') value = cell.headcount;
+                        bodyHtml += '<td>' + value + '</td>';
+                    });
+                });
+                bodyHtml += '</tr>';
+            });
+            tableBody.innerHTML = bodyHtml;
+        }
+
+        function resetOlapFilters() {
+            const rows = document.getElementById('olap_rows');
+            const values = document.getElementById('olap_values');
+            Array.from(rows.options).forEach(opt => opt.selected = opt.value === 'Магазин');
+            Array.from(values.options).forEach(opt => opt.selected = ['hired', 'dismissed'].includes(opt.value));
+            document.getElementById('olap_columns').value = 'week';
+            applyOlapFilters();
+        }
+
+        // ============================================================================
+        // Переключение панели фильтров (прячет кнопку при открытии)
+        // ============================================================================
+        function toggleGlobalFilters() {
+            const panel = document.getElementById('global-filters-panel');
+            const btn   = document.querySelector('.global-filters-toggle');
+            if (!panel) return;
+
+            // переключаем панель
+            panel.classList.toggle('open');
+            const isOpen = panel.classList.contains('open');
+
+            // прячем/показываем кнопку "Фильтры"
+            if (btn) {
+                btn.classList.toggle('hidden', isOpen);
+            }
+
+            // сжимаем / возвращаем область графиков
+            document.body.classList.toggle('filters-open', isOpen);
+
+            // после анимации дергаем ресайз графиков
+            setTimeout(() => {
+                try {
+                    // 1) глобальный resize — многие либы на него подписаны
+                    window.dispatchEvent(new Event('resize'));
+
+                    // 2) прямой ресайз всех графиков Plotly (только на активной вкладке)
+                    if (window.Plotly) {
+                        const activeTab = document.querySelector('.tab-content.active');
+                        if (activeTab) {
+                            activeTab.querySelectorAll('.plotly-graph-div')
+                                .forEach(div => {
+                                    try {
+                                        Plotly.Plots.resize(div);
+                                    } catch (e) {
+                                        console.warn('Resize error for chart', e);
+                                    }
+                                });
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Charts resize error', e);
+                }
+            }, 300); // чуть больше, чем transition в CSS (0.25s)
+        }
+
+        // ============================================================================
+        // ДЕТАЛИЗАЦИЯ ГРАФИКОВ
+        // ============================================================================
+        const detailLevels = {};
+
+        function setDetailLevel(chartId, level) {
+            detailLevels[chartId] = level;
+
+            // Обновление активной кнопки
+            const container = document.getElementById(chartId)?.parentElement;
+            if (container) {
+                container.querySelectorAll('.detail-btn').forEach(btn => {
+                    btn.classList.toggle('active', btn.dataset.level === level);
+                });
+            }
+
+            // Пересчет данных и обновление графика
+            const startDateStr = document.getElementById('startDate')?.value || '';
+            const endDateStr = document.getElementById('endDate')?.value || '';
+            const startDate = startDateStr ? new Date(startDateStr) : null;
+            const endDate = endDateStr ? new Date(endDateStr) : null;
+
+            calculateCombinedDataJS(startDate, endDate, level);
+
+            const updateFunc = window['update' + chartId.charAt(0).toUpperCase() + chartId.slice(1)];
+            if (typeof updateFunc === 'function') {
+                updateFunc();
+            }
+        }
+
+        // ============================================================================
+        // ФУНКЦИЯ ОБНОВЛЕНИЯ ВСЕХ ГРАФИКОВ
+        // ============================================================================
+        function updateAllCharts() {
+            const charts = document.querySelectorAll('[id^="chart"]');
+            charts.forEach(chart => {
+                const chartId = chart.id;
+                const updateFunc = window['update' + chartId.charAt(0).toUpperCase() + chartId.slice(1)];
+                if (typeof updateFunc === 'function') {
+                    updateFunc();
+                }
+            });
+        }
+
+        // ============================================================================
+        // ПОДСВЕТКА КНОПОК СБРОСА ФИЛЬТРОВ
+        // ============================================================================
+        function updateResetButtons() {
+            document.querySelectorAll('.filter-group').forEach(group => {
+                const select = group.querySelector('select');
+                const resetBtn = group.querySelector('.filter-reset-btn');
+                
+                if (!resetBtn || !select) return;
+
+                const selectedOptions = Array.from(select.selectedOptions);
+                const hasNonEmptySelection = selectedOptions.some(opt => opt.value !== '');
+                const hasOnlyAll = selectedOptions.length === 1 && selectedOptions[0].value === '';
+
+                const isActive = hasNonEmptySelection && !hasOnlyAll;
+
+                resetBtn.classList.toggle('active', isActive);
+            });
+        }
+
+        // Отслеживаем изменения в фильтрах
+        document.addEventListener('change', function(e) {
+            if (e.target.closest('.filter-group')) {
+                updateResetButtons();
+            }
+        });
+
+        // Отслеживаем клики по кнопкам сброса
+        document.addEventListener('click', function(e) {
+            if (e.target.closest('.filter-reset-btn')) {
+                setTimeout(updateResetButtons, 50);
+            }
+        });
+
+        // ============================================================================
+        // ФОРМАТИРОВАНИЕ СЧЕТЧИКОВ В ФИЛЬТРАХ
+        // ============================================================================
+        function formatFilterCounts() {
+            const showCounts = document.getElementById('showFilterCounts')?.checked ?? true;
+            
+            // Находим все опции в фильтрах и форматируем текст с счетчиками
+            document.querySelectorAll('.filter-group select option').forEach(opt => {
+                const text = opt.textContent;
+                // Проверяем, есть ли счетчик в скобках
+                const match = text.match(/^(.+?)\s+\((\d+)\)$/);
+                if (match) {
+                    const label = match[1];
+                    const count = match[2];
+                    
+                    if (showCounts) {
+                        // Показываем с количеством
+                        opt.textContent = `${label}      (${count})`;
+                    } else {
+                        // Показываем только название
+                        opt.textContent = label;
+                    }
+                } else {
+                    // Если нет счетчика, проверяем сохраненные данные
+                    const originalText = opt.dataset.originalText;
+                    if (originalText && showCounts) {
+                        opt.textContent = originalText;
+                    }
+                }
+                
+                // Сохраняем оригинальный текст для переключения
+                if (!opt.dataset.originalText && match) {
+                    opt.dataset.originalText = `${match[1]}      (${match[2]})`;
+                }
+            });
+        }
+        
+        // Обработчик чекбокса
+        document.addEventListener('change', function(e) {
+            if (e.target.id === 'showFilterCounts') {
+                formatFilterCounts();
+            }
+        });
+
+        // ============================================================================
+        // ИНИЦИАЛИЗАЦИЯ
+        // ============================================================================
+        window.addEventListener('DOMContentLoaded', function() {
+            console.log('🚀 Инициализация дашборда...');
+
+            // Восстанавливаем активную вкладку
+            const savedTab = localStorage.getItem('activeTab') || 'tab1';
+            const tabBtn = document.querySelector(`.tab-btn[onclick="switchTab('${savedTab}')"]`);
+            if (tabBtn) {
+                document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+                document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+                document.getElementById(savedTab)?.classList.add('active');
+                tabBtn.classList.add('active');
+            }
+
+            // Форматируем счетчики в фильтрах
+            formatFilterCounts();
+
+            // Выбираем "Все" во всех фильтрах
+            document.querySelectorAll('select[multiple] option[value=""]').forEach(opt => {
+                opt.selected = true;
+            });
+
+            // Стартуем с "Этого месяца" через пресет (подсветится кнопка)
+            setDateRangePreset('this_year');
+
+            // Детализация по умолчанию
+            setGlobalDetailLevel('month');
+
+            // Обновляем состояние кнопок сброса
+            updateResetButtons();
+            -
+            // Инициализация графиков во всех вкладках
+            document.querySelectorAll('[id^="chart"]').forEach(chartDiv => {
+                if (!chartDiv.id.includes('_')) {
+                    const chartId = chartDiv.id;
+                    const updateFuncName = 'update' + chartId.charAt(0).toUpperCase() + chartId.slice(1);
+                    console.log('Проверка функции:', updateFuncName, typeof window[updateFuncName]);
+                    if (typeof window[updateFuncName] === 'function') {
+                        try {
+                            console.log('Вызов:', updateFuncName);
+                            window[updateFuncName]();
+                        } catch (e) {
+                            console.log('Ошибка инициализации:', chartId, e);
+                        }
+                    }
+                }
+            });
+        });
+                // ============================================================================
+        // СВОРАЧИВАНИЕ ПАНЕЛЕЙ ГРАФИКОВ
+        // ============================================================================
+        document.addEventListener('click', function (e) {
+            const btn = e.target.closest('.chart-toggle-btn');
+            if (!btn) return;
+
+            const targetId = btn.dataset.target;
+            const panel = document.getElementById(targetId);
+            if (!panel) return;
+
+            panel.classList.toggle('collapsed');
+            btn.classList.toggle('collapsed');
+        });
+    </script>
+</body>
+</html>
