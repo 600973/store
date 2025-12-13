@@ -1103,12 +1103,326 @@ class BaseChart:
         if not self.show_table and not self.show_prompt:
             return ""
 
-        # Здесь был очень длинный JS код для таблиц и промптов
-        # Для краткости опущен, но в реальном файле он есть полностью
-        # Возвращаем только короткую заглушку для демонстрации
+        natural_sort_js = self._get_natural_sort_js()
+
         return f'''
-        // Table and prompt JavaScript code for {self.chart_id}
-        // Full implementation available in the complete file
+        {natural_sort_js}
+
+        function toggleView_{self.chart_id}(view) {{
+            const chartDiv = document.getElementById('{self.chart_id}');
+            const tableDiv = document.getElementById('{self.chart_id}_table');
+            const promptDiv = document.getElementById('{self.chart_id}_prompt');
+
+            const buttons = document.querySelectorAll('.chart-wrapper .view-btn');
+            buttons.forEach(btn => btn.classList.remove('active'));
+
+            if (view === 'chart') {{
+                chartDiv.style.display = 'block';
+                tableDiv.style.display = 'none';
+                promptDiv.style.display = 'none';
+                buttons[0].classList.add('active');
+            }} else if (view === 'table') {{
+                chartDiv.style.display = 'none';
+                tableDiv.style.display = 'block';
+                promptDiv.style.display = 'none';
+                buttons[1].classList.add('active');
+                generateTable_{self.chart_id}();
+            }} else if (view === 'prompt') {{
+                chartDiv.style.display = 'none';
+                tableDiv.style.display = 'none';
+                promptDiv.style.display = 'block';
+                const lastBtn = buttons[buttons.length - 1];
+                lastBtn.classList.add('active');
+                loadPrompt_{self.chart_id}();
+            }}
+        }}
+
+        let isTransposed_{self.chart_id} = false;
+        let currentSortColumn_{self.chart_id} = null;
+        let currentSortOrder_{self.chart_id} = 'asc';
+
+        function generateTable_{self.chart_id}() {{
+            if (typeof getTableData_{self.chart_id} !== 'function') {{
+                console.error('getTableData_{self.chart_id} function not defined');
+                return;
+            }}
+
+            const tableData = getTableData_{self.chart_id}();
+            if (!tableData || tableData.length === 0) {{
+                document.getElementById('{self.chart_id}_table').innerHTML = '<p style="padding: 20px;">Нет данных для отображения</p>';
+                return;
+            }}
+
+            let html = '<div class="table-controls">';
+            html += '<div class="table-info">Строк: ' + tableData.length + '</div>';
+            html += '<div class="export-buttons">';
+            html += '<button class="transpose-btn" onclick="transposeTable_{self.chart_id}()">⇄ Транспонировать</button>';
+            html += '<button class="export-btn" onclick="exportTableToCSV_{self.chart_id}()">📥 CSV</button>';
+            html += '<button class="export-btn" onclick="exportTableToExcel_{self.chart_id}()">📊 Excel</button>';
+            html += '</div>';
+            html += '</div>';
+
+            html += '<div class="table-scroll-wrapper">';
+            html += '<table class="chart-table">';
+
+            // Header
+            const columns = Object.keys(tableData[0]);
+            html += '<thead><tr>';
+            columns.forEach(col => {{
+                const sortIndicator = currentSortColumn_{self.chart_id} === col
+                    ? (currentSortOrder_{self.chart_id} === 'asc' ? ' ▲' : ' ▼')
+                    : '';
+                html += '<th onclick="sortTable_{self.chart_id}(\'' + col + '\')">' + col + sortIndicator + '</th>';
+            }});
+            html += '</tr></thead>';
+
+            // Body
+            html += '<tbody>';
+            tableData.forEach(row => {{
+                html += '<tr>';
+                columns.forEach(col => {{
+                    const value = row[col];
+                    const displayValue = typeof value === 'number' ? value.toLocaleString('ru-RU') : value;
+                    html += '<td>' + displayValue + '</td>';
+                }});
+                html += '</tr>';
+            }});
+            html += '</tbody>';
+
+            html += '</table>';
+            html += '</div>';
+
+            document.getElementById('{self.chart_id}_table').innerHTML = html;
+        }}
+
+        function transposeTable_{self.chart_id}() {{
+            isTransposed_{self.chart_id} = !isTransposed_{self.chart_id};
+
+            const tableData = getTableData_{self.chart_id}();
+            if (!tableData || tableData.length === 0) return;
+
+            let html = '<div class="table-controls">';
+            html += '<div class="table-info">Режим: ' + (isTransposed_{self.chart_id} ? 'Транспонированный' : 'Обычный') + '</div>';
+            html += '<div class="export-buttons">';
+            html += '<button class="transpose-btn" onclick="transposeTable_{self.chart_id}()">⇄ Транспонировать</button>';
+            html += '<button class="export-btn" onclick="exportTableToCSV_{self.chart_id}()">📥 CSV</button>';
+            html += '<button class="export-btn" onclick="exportTableToExcel_{self.chart_id}()">📊 Excel</button>';
+            html += '</div>';
+            html += '</div>';
+
+            html += '<div class="table-scroll-wrapper">';
+            html += '<table class="chart-table">';
+
+            if (isTransposed_{self.chart_id}) {{
+                const columns = Object.keys(tableData[0]);
+
+                columns.forEach(col => {{
+                    html += '<tr>';
+                    html += '<th>' + col + '</th>';
+                    tableData.forEach(row => {{
+                        const value = row[col];
+                        const displayValue = typeof value === 'number' ? value.toLocaleString('ru-RU') : value;
+                        html += '<td>' + displayValue + '</td>';
+                    }});
+                    html += '</tr>';
+                }});
+            }} else {{
+                const columns = Object.keys(tableData[0]);
+                html += '<thead><tr>';
+                columns.forEach(col => {{
+                    const sortIndicator = currentSortColumn_{self.chart_id} === col
+                        ? (currentSortOrder_{self.chart_id} === 'asc' ? ' ▲' : ' ▼')
+                        : '';
+                    html += '<th onclick="sortTable_{self.chart_id}(\'' + col + '\')">' + col + sortIndicator + '</th>';
+                }});
+                html += '</tr></thead>';
+
+                html += '<tbody>';
+                tableData.forEach(row => {{
+                    html += '<tr>';
+                    columns.forEach(col => {{
+                        const value = row[col];
+                        const displayValue = typeof value === 'number' ? value.toLocaleString('ru-RU') : value;
+                        html += '<td>' + displayValue + '</td>';
+                    }});
+                    html += '</tr>';
+                }});
+                html += '</tbody>';
+            }}
+
+            html += '</table>';
+            html += '</div>';
+
+            document.getElementById('{self.chart_id}_table').innerHTML = html;
+        }}
+
+        function sortTable_{self.chart_id}(column) {{
+            if (currentSortColumn_{self.chart_id} === column) {{
+                currentSortOrder_{self.chart_id} = currentSortOrder_{self.chart_id} === 'asc' ? 'desc' : 'asc';
+            }} else {{
+                currentSortColumn_{self.chart_id} = column;
+                currentSortOrder_{self.chart_id} = 'asc';
+            }}
+
+            const tableData = getTableData_{self.chart_id}();
+            tableData.sort((a, b) => {{
+                let aVal = a[column];
+                let bVal = b[column];
+
+                if (typeof aVal === 'number' && typeof bVal === 'number') {{
+                    return currentSortOrder_{self.chart_id} === 'asc' ? aVal - bVal : bVal - aVal;
+                }} else {{
+                    const comparison = naturalSort(aVal, bVal);
+                    return currentSortOrder_{self.chart_id} === 'asc' ? comparison : -comparison;
+                }}
+            }});
+
+            // Перезаписываем результат getTableData
+            window.sortedTableData_{self.chart_id} = tableData;
+            generateTable_{self.chart_id}();
+        }}
+
+        function exportTableToCSV_{self.chart_id}() {{
+            const tableData = window.sortedTableData_{self.chart_id} || getTableData_{self.chart_id}();
+            if (!tableData || tableData.length === 0) return;
+
+            const columns = Object.keys(tableData[0]);
+            let csv = columns.join(',') + '\\n';
+
+            tableData.forEach(row => {{
+                const values = columns.map(col => {{
+                    const value = row[col];
+                    return typeof value === 'string' && value.includes(',') ? '"' + value + '"' : value;
+                }});
+                csv += values.join(',') + '\\n';
+            }});
+
+            const blob = new Blob([csv], {{ type: 'text/csv;charset=utf-8;' }});
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = '{self.chart_id}_data.csv';
+            link.click();
+        }}
+
+        function exportTableToExcel_{self.chart_id}() {{
+            const tableData = window.sortedTableData_{self.chart_id} || getTableData_{self.chart_id}();
+            if (!tableData || tableData.length === 0) return;
+
+            const columns = Object.keys(tableData[0]);
+            let html = '<table>';
+            html += '<tr>' + columns.map(col => '<th>' + col + '</th>').join('') + '</tr>';
+
+            tableData.forEach(row => {{
+                html += '<tr>' + columns.map(col => '<td>' + row[col] + '</td>').join('') + '</tr>';
+            }});
+            html += '</table>';
+
+            const blob = new Blob([html], {{ type: 'application/vnd.ms-excel' }});
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = '{self.chart_id}_data.xls';
+            link.click();
+        }}
+
+        function loadPrompt_{self.chart_id}() {{
+            fetch('prompts.json')
+                .then(response => response.json())
+                .then(prompts => {{
+                    const promptText = prompts['{self.chart_id}'] || 'Промпт не найден для этого графика';
+                    document.getElementById('{self.chart_id}_prompt_text').value = promptText;
+                }})
+                .catch(error => {{
+                    console.error('Ошибка загрузки промпта:', error);
+                    document.getElementById('{self.chart_id}_prompt_text').value = 'Ошибка загрузки промпта';
+                }});
+        }}
+
+        function sendPrompt_{self.chart_id}() {{
+            const promptText = document.getElementById('{self.chart_id}_prompt_text').value;
+            const provider = document.querySelector('input[name="provider_{self.chart_id}"]:checked').value;
+            const model = document.getElementById('{self.chart_id}_model').value;
+            const rowsLimit = document.getElementById('{self.chart_id}_rows_limit').value;
+
+            let tableData = getTableData_{self.chart_id}();
+            if (rowsLimit !== 'all') {{
+                tableData = tableData.slice(0, parseInt(rowsLimit));
+            }}
+
+            const dataStr = JSON.stringify(tableData, null, 2);
+            const contextStr = window.analysisContext ? JSON.stringify(window.analysisContext, null, 2) : '';
+
+            const finalPrompt = promptText
+                .replace('{{{{data}}}}', dataStr)
+                .replace('{{{{context}}}}', contextStr);
+
+            const apiUrl = provider === 'ollama'
+                ? 'http://localhost:11434/api/generate'
+                : 'http://localhost:1234/v1/chat/completions';
+
+            document.getElementById('{self.chart_id}_llm_loading').style.display = 'block';
+            document.getElementById('{self.chart_id}_llm_result').style.display = 'none';
+
+            if (provider === 'ollama') {{
+                fetch(apiUrl, {{
+                    method: 'POST',
+                    headers: {{ 'Content-Type': 'application/json' }},
+                    body: JSON.stringify({{
+                        model: model,
+                        prompt: finalPrompt,
+                        stream: false
+                    }})
+                }})
+                .then(response => response.json())
+                .then(data => {{
+                    document.getElementById('{self.chart_id}_llm_loading').style.display = 'none';
+                    document.getElementById('{self.chart_id}_llm_result').style.display = 'block';
+                    document.getElementById('{self.chart_id}_llm_result').querySelector('.llm-result-text').textContent = data.response;
+                }})
+                .catch(error => {{
+                    document.getElementById('{self.chart_id}_llm_loading').style.display = 'none';
+                    console.error('Ошибка LLM:', error);
+                    alert('Ошибка подключения к LLM: ' + error.message);
+                }});
+            }} else {{
+                fetch(apiUrl, {{
+                    method: 'POST',
+                    headers: {{ 'Content-Type': 'application/json' }},
+                    body: JSON.stringify({{
+                        model: model,
+                        messages: [{{ role: 'user', content: finalPrompt }}],
+                        temperature: 0.7
+                    }})
+                }})
+                .then(response => response.json())
+                .then(data => {{
+                    document.getElementById('{self.chart_id}_llm_loading').style.display = 'none';
+                    document.getElementById('{self.chart_id}_llm_result').style.display = 'block';
+                    document.getElementById('{self.chart_id}_llm_result').querySelector('.llm-result-text').textContent = data.choices[0].message.content;
+                }})
+                .catch(error => {{
+                    document.getElementById('{self.chart_id}_llm_loading').style.display = 'none';
+                    console.error('Ошибка LLM:', error);
+                    alert('Ошибка подключения к LLM: ' + error.message);
+                }});
+            }}
+        }}
+
+        function savePrompt_{self.chart_id}() {{
+            const promptText = document.getElementById('{self.chart_id}_prompt_text').value;
+            const statusDiv = document.getElementById('{self.chart_id}_save_status');
+
+            statusDiv.textContent = 'Сохранение промпта в файл prompts.json невозможно из браузера. Скопируйте текст вручную.';
+            statusDiv.className = 'save-status error';
+            statusDiv.style.display = 'block';
+
+            setTimeout(() => {{
+                statusDiv.style.display = 'none';
+            }}, 3000);
+        }}
+
+        function resetPrompt_{self.chart_id}() {{
+            loadPrompt_{self.chart_id}();
+        }}
         '''
 
     def _get_natural_sort_js(self) -> str:

@@ -27,13 +27,25 @@ def main():
         print(f"   Площадь добавлена для всех магазинов")
 
     print("\n3. Создание графиков...")
-    chart1 = ChartRevenueDynamics(chart_id='chart1', width=100)
+    chart_revenue_dynamics = ChartRevenueDynamics(
+        chart_id='chart_revenue_dynamics',
+        width=100
+    )
     print("   График динамики выручки")
 
     print("\n4. Создание layout...")
-    layout = GridLayout(rows=[
-        GridRow(charts=[chart1], height=600)
+    layout_tab1 = GridLayout([
+        GridRow([chart_revenue_dynamics], height=600)
     ])
+
+    tabs = {
+        'tab1': {
+            'name': 'Основная аналитика',
+            'layout': layout_tab1
+        }
+    }
+
+    print(f"   Вкладок: {len(tabs)}")
 
     print("\n5. Генерация HTML...")
     filter_config = {
@@ -43,7 +55,7 @@ def main():
         'Год': {'type': 'multiselect', 'label': 'Год'},
         'Месяц': {'type': 'multiselect', 'label': 'Месяц'}
     }
-    engine = DashboardEngine(df, layout=layout, enable_context=False, filter_config=filter_config)
+    engine = DashboardEngine(df, tabs=tabs, enable_context=False, filter_config=filter_config)
     output_file = 'store_dashboard.html'
     engine.generate_html(output_file)
 
