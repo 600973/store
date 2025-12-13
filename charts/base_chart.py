@@ -1172,7 +1172,7 @@ class BaseChart:
                 const sortIndicator = currentSortColumn_{self.chart_id} === col
                     ? (currentSortOrder_{self.chart_id} === 'asc' ? ' ▲' : ' ▼')
                     : '';
-                html += '<th onclick="sortTable_{self.chart_id}(\'' + col + '\')">' + col + sortIndicator + '</th>';
+                html += '<th onclick="sortTable_{self.chart_id}(\\'' + col + '\\')">' + col + sortIndicator + '</th>';
             }});
             html += '</tr></thead>';
 
@@ -1233,7 +1233,7 @@ class BaseChart:
                     const sortIndicator = currentSortColumn_{self.chart_id} === col
                         ? (currentSortOrder_{self.chart_id} === 'asc' ? ' ▲' : ' ▼')
                         : '';
-                    html += '<th onclick="sortTable_{self.chart_id}(\'' + col + '\')">' + col + sortIndicator + '</th>';
+                    html += '<th onclick="sortTable_{self.chart_id}(\\'' + col + '\\')">' + col + sortIndicator + '</th>';
                 }});
                 html += '</tr></thead>';
 
