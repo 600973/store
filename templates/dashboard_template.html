@@ -1195,7 +1195,7 @@
                         
                         // Вызываем update функцию для графика
                         const chartId = chartDiv.id;
-                        const updateFuncName = 'update' + chartId.charAt(0).toUpperCase() + chartId.slice(1);
+                        const updateFuncName = 'update' + chartId;
                         if (typeof window[updateFuncName] === 'function') {
                             console.log('Переключение вкладки: вызов', updateFuncName);
                             setTimeout(() => window[updateFuncName](), 150);
@@ -1654,9 +1654,9 @@
             -
             // Инициализация графиков во всех вкладках
             document.querySelectorAll('[id^="chart"]').forEach(chartDiv => {
-                if (!chartDiv.id.includes('_')) {
+                if (!chartDiv.id.includes('_table') && !chartDiv.id.includes('_prompt')) {
                     const chartId = chartDiv.id;
-                    const updateFuncName = 'update' + chartId.charAt(0).toUpperCase() + chartId.slice(1);
+                    const updateFuncName = 'update' + chartId;
                     console.log('Проверка функции:', updateFuncName, typeof window[updateFuncName]);
                     if (typeof window[updateFuncName] === 'function') {
                         try {

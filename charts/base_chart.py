@@ -1271,6 +1271,18 @@ class BaseChart:
 
                 if (typeof aVal === 'number' && typeof bVal === 'number') {{
                     return currentSortOrder_{self.chart_id} === 'asc' ? aVal - bVal : bVal - aVal;
+                }} else if (column === 'Период' && typeof aVal === 'string' && typeof bVal === 'string') {{
+                    // Специальная сортировка для дат в формате DD.MM.YYYY
+                    const parseDate = (dateStr) => {{
+                        const parts = dateStr.split('.');
+                        if (parts.length === 3) {{
+                            return new Date(parts[2], parts[1] - 1, parts[0]);
+                        }}
+                        return new Date(0);
+                    }};
+                    const dateA = parseDate(aVal);
+                    const dateB = parseDate(bVal);
+                    return currentSortOrder_{self.chart_id} === 'asc' ? dateA - dateB : dateB - dateA;
                 }} else {{
                     const comparison = naturalSort(aVal, bVal);
                     return currentSortOrder_{self.chart_id} === 'asc' ? comparison : -comparison;

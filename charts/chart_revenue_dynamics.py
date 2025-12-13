@@ -17,12 +17,9 @@ class ChartRevenueDynamics(BaseChart):
             const monthlyData = {{}};
 
             data.forEach(row => {{
-                const year = row['Год'];
-                const month = row['Месяц'];
+                const dateKey = row['Дата'];
                 const store = row['Магазин'];
                 const revenue = row['Выручка'];
-
-                const dateKey = `${{year}}-${{String(month).padStart(2, '0')}}`;
 
                 if (!monthlyData[dateKey]) {{
                     monthlyData[dateKey] = {{}};
@@ -35,7 +32,18 @@ class ChartRevenueDynamics(BaseChart):
                 monthlyData[dateKey][store] += revenue;
             }});
 
-            const dates = Object.keys(monthlyData).sort();
+            // Сортируем даты хронологически
+            const dates = Object.keys(monthlyData).sort((a, b) => {{
+                const parseDate = (dateStr) => {{
+                    const parts = dateStr.split('.');
+                    if (parts.length === 3) {{
+                        return new Date(parts[2], parts[1] - 1, parts[0]);
+                    }}
+                    return new Date(0);
+                }};
+                return parseDate(a) - parseDate(b);
+            }});
+
             const stores = [...new Set(data.map(r => r['Магазин']))].sort((a, b) => {{
                 const numA = parseInt(a.match(/\\d+/));
                 const numB = parseInt(b.match(/\\d+/));
@@ -82,12 +90,9 @@ class ChartRevenueDynamics(BaseChart):
             const monthlyData = {{}};
 
             data.forEach(row => {{
-                const year = row['Год'];
-                const month = row['Месяц'];
+                const dateKey = row['Дата'];
                 const store = row['Магазин'];
                 const revenue = row['Выручка'];
-
-                const dateKey = `${{year}}-${{String(month).padStart(2, '0')}}`;
 
                 if (!monthlyData[dateKey]) {{
                     monthlyData[dateKey] = {{}};
@@ -100,7 +105,18 @@ class ChartRevenueDynamics(BaseChart):
                 monthlyData[dateKey][store] += revenue;
             }});
 
-            const dates = Object.keys(monthlyData).sort();
+            // Сортируем даты хронологически
+            const dates = Object.keys(monthlyData).sort((a, b) => {{
+                const parseDate = (dateStr) => {{
+                    const parts = dateStr.split('.');
+                    if (parts.length === 3) {{
+                        return new Date(parts[2], parts[1] - 1, parts[0]);
+                    }}
+                    return new Date(0);
+                }};
+                return parseDate(a) - parseDate(b);
+            }});
+
             const stores = [...new Set(data.map(r => r['Магазин']))].sort((a, b) => {{
                 const numA = parseInt(a.match(/\\d+/));
                 const numB = parseInt(b.match(/\\d+/));
