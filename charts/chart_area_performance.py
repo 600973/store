@@ -200,8 +200,14 @@ class ChartAreaPerformance(BaseChart):
 
         /**
          * Агрегация данных по магазинам с расчётом метрик на м²
+         * ВАЖНО: Метрики нормализуются к годовым значениям (365 дней) для сопоставимости
+         *
+         * @param {{Array}} data - Отфильтрованные данные
+         * @param {{Date|null}} startDate - Дата начала периода
+         * @param {{Date|null}} endDate - Дата окончания периода
+         * @returns {{Array}} Массив объектов с метриками по магазинам
          */
-        function aggregateStorePerformance(data) {{
+        function aggregateStorePerformance(data, startDate, endDate) {{
             const storeMap = {{}};
 
             data.forEach(row => {{
@@ -223,20 +229,36 @@ class ChartAreaPerformance(BaseChart):
                 storeMap[store].profit += profit;
             }});
 
-            // Преобразуем в массив и рассчитываем метрики на м²
+            // Рассчитываем количество дней в периоде для нормализации
+            const periodDays = calculatePeriodDays(startDate, endDate);
+
+            // Коэффициент нормализации к году (365 дней)
+            const annualizationFactor = periodDays > 0 ? (365 / periodDays) : 1;
+
+            console.log(`📊 Нормализация метрик: период=${{periodDays}} дней, коэффициент=${{annualizationFactor.toFixed(2)}}x`);
+
+            // Преобразуем в массив и рассчитываем НОРМАЛИЗОВАННЫЕ метрики на м²
             const result = Object.values(storeMap).map(s => {{
-                const revenuePerM2 = s.area > 0 ? Math.round(s.revenue / s.area) : 0;
-                const profitPerM2 = s.area > 0 ? Math.round(s.profit / s.area) : 0;
+                // Нормализуем к годовым значениям
+                const annualizedRevenue = s.revenue * annualizationFactor;
+                const annualizedProfit = s.profit * annualizationFactor;
+
+                // Рассчитываем метрики на м² (годовые)
+                const revenuePerM2 = s.area > 0 ? Math.round(annualizedRevenue / s.area) : 0;
+                const profitPerM2 = s.area > 0 ? Math.round(annualizedProfit / s.area) : 0;
                 const storeId = s.store.match(/\\d+/) ? parseInt(s.store.match(/\\d+/)[0]) : 0;
 
                 return {{
                     store: s.store,
                     storeId: storeId,
                     area: s.area,
-                    revenue: s.revenue,
-                    profit: s.profit,
-                    revenuePerM2: revenuePerM2,
-                    profitPerM2: profitPerM2
+                    revenue: s.revenue,                    // Оригинальная выручка за период
+                    profit: s.profit,                      // Оригинальная прибыль за период
+                    annualizedRevenue: annualizedRevenue,  // Годовая выручка (экстраполированная)
+                    annualizedProfit: annualizedProfit,    // Годовая прибыль (экстраполированная)
+                    revenuePerM2: revenuePerM2,            // Годовая выручка/м²
+                    profitPerM2: profitPerM2,              // Годовая прибыль/м²
+                    periodDays: periodDays                 // Для отображения
                 }};
             }});
 
@@ -248,10 +270,10 @@ class ChartAreaPerformance(BaseChart):
 
         // Маппинг значений селекторов на названия для отображения
         const metricLabels_{self.chart_id} = {{
-            'revenuePerM2': 'Выручка/м²',
-            'profitPerM2': 'Прибыль/м²',
-            'revenue': 'Общая выручка',
-            'profit': 'Общая прибыль',
+            'revenuePerM2': 'Выручка/м² (годовая, 365 дней)',
+            'profitPerM2': 'Прибыль/м² (годовая, 365 дней)',
+            'revenue': 'Общая выручка (за период)',
+            'profit': 'Общая прибыль (за период)',
             'area': 'Площадь',
             'fixed': 'Одинаковый'
         }};
@@ -275,7 +297,15 @@ class ChartAreaPerformance(BaseChart):
             }}
 
             const data = window.filteredData || window.rawData;
-            const storeData = aggregateStorePerformance(data);
+
+            // Получаем выбранные даты из глобальных фильтров
+            const startDateStr = document.getElementById('startDate')?.value || '';
+            const endDateStr = document.getElementById('endDate')?.value || '';
+            const startDate = startDateStr ? new Date(startDateStr) : null;
+            const endDate = endDateStr ? new Date(endDateStr) : null;
+
+            // Передаем даты в функцию агрегации для нормализации метрик
+            const storeData = aggregateStorePerformance(data, startDate, endDate);
 
             if (storeData.length === 0) {{
                 Plotly.purge('{self.chart_id}');
@@ -327,10 +357,14 @@ class ChartAreaPerformance(BaseChart):
             const hoverText = storeData.map(s =>
                 `<b>${{s.store}}</b><br>` +
                 `Площадь: ${{s.area.toLocaleString('ru-RU')}} м²<br>` +
-                `Выручка/м²: ${{s.revenuePerM2.toLocaleString('ru-RU')}} руб<br>` +
-                `Прибыль/м²: ${{s.profitPerM2.toLocaleString('ru-RU')}} руб<br>` +
-                `Общая выручка: ${{Math.round(s.revenue).toLocaleString('ru-RU')}} руб<br>` +
-                `Общая прибыль: ${{Math.round(s.profit).toLocaleString('ru-RU')}} руб`
+                `<br><b>📊 Годовые показатели (365 дней):</b><br>` +
+                `Выручка/м²: ${{s.revenuePerM2.toLocaleString('ru-RU')}} руб/м²<br>` +
+                `Прибыль/м²: ${{s.profitPerM2.toLocaleString('ru-RU')}} руб/м²<br>` +
+                `Годовая выручка: ${{Math.round(s.annualizedRevenue).toLocaleString('ru-RU')}} руб<br>` +
+                `Годовая прибыль: ${{Math.round(s.annualizedProfit).toLocaleString('ru-RU')}} руб<br>` +
+                `<br><b>📅 Фактические за период (${{s.periodDays}} дн):</b><br>` +
+                `Выручка: ${{Math.round(s.revenue).toLocaleString('ru-RU')}} руб<br>` +
+                `Прибыль: ${{Math.round(s.profit).toLocaleString('ru-RU')}} руб`
             );
 
             const yAxisLabel = metricLabels_{self.chart_id}[yAxisMetric] || yAxisMetric;
@@ -433,10 +467,13 @@ class ChartAreaPerformance(BaseChart):
             return storeData.map(s => ({{
                 'Магазин': s.store,
                 'Площадь (м²)': s.area,
-                'Выручка': Math.round(s.revenue),
-                'Прибыль': Math.round(s.profit),
-                'Выручка/м²': s.revenuePerM2,
-                'Прибыль/м²': s.profitPerM2
+                'Выручка/м² (год, 365 дн)': s.revenuePerM2,
+                'Прибыль/м² (год, 365 дн)': s.profitPerM2,
+                'Годовая выручка': Math.round(s.annualizedRevenue),
+                'Годовая прибыль': Math.round(s.annualizedProfit),
+                'Выручка за период': Math.round(s.revenue),
+                'Прибыль за период': Math.round(s.profit),
+                'Период (дней)': s.periodDays
             }}));
         }}
 

@@ -1152,6 +1152,63 @@
         });
 
         // ============================================================================
+        // РАСЧЕТ ПЕРИОДА ДЛЯ НОРМАЛИЗАЦИИ МЕТРИК
+        // ============================================================================
+        /**
+         * Рассчитать количество дней в выбранном периоде
+         * Используется для нормализации метрик к годовым значениям (365 дней)
+         *
+         * @param {Date|null} startDate - Дата начала периода
+         * @param {Date|null} endDate - Дата окончания периода
+         * @returns {number} Количество дней в периоде
+         */
+        function calculatePeriodDays(startDate, endDate) {
+            // Если период не выбран - считаем весь доступный период в данных
+            if (!startDate && !endDate) {
+                // Ищем минимальную и максимальную дату в данных
+                const allDates = rawData.map(r => {
+                    if (r['Год'] && r['Месяц']) {
+                        return new Date(r['Год'], r['Месяц'] - 1, 1);
+                    }
+                    return null;
+                }).filter(d => d !== null);
+
+                if (allDates.length === 0) return 365; // Fallback на год
+
+                const minDate = new Date(Math.min(...allDates));
+                const maxDate = new Date(Math.max(...allDates));
+
+                // Добавляем 1 день чтобы включить конечную дату
+                return Math.ceil((maxDate - minDate) / (1000 * 60 * 60 * 24)) + 30; // +30 дней для включения последнего месяца
+            }
+
+            // Если выбран только начало
+            if (startDate && !endDate) {
+                const today = new Date();
+                return Math.ceil((today - startDate) / (1000 * 60 * 60 * 24)) + 1;
+            }
+
+            // Если выбран только конец
+            if (!startDate && endDate) {
+                // Ищем минимальную дату в данных
+                const allDates = rawData.map(r => {
+                    if (r['Год'] && r['Месяц']) {
+                        return new Date(r['Год'], r['Месяц'] - 1, 1);
+                    }
+                    return null;
+                }).filter(d => d !== null);
+
+                if (allDates.length === 0) return 365;
+
+                const minDate = new Date(Math.min(...allDates));
+                return Math.ceil((endDate - minDate) / (1000 * 60 * 60 * 24)) + 1;
+            }
+
+            // Если выбраны оба периода
+            return Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
+        }
+
+        // ============================================================================
         // ПЕРЕКЛЮЧЕНИЕ ВКЛАДОК
         // ============================================================================
         function switchTab(tabId) {
