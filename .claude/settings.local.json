@@ -6,7 +6,22 @@
       "Bash(git add:*)",
       "Bash(git commit -m \"$(cat <<''EOF''\nRemove writeoffs analysis (method 5) from optimal area calculation\n\nKeep only 4 methods based on available data:\n1. Performance per m²\n2. Non-linear regression\n3. Marginal efficiency\n4. Clustering + benchmarking\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n)\")",
       "Bash(git push)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(python:*)",
+      "Bash(git merge:*)",
+      "Bash(git push:*)",
+      "Bash(start \"\" \"d:\\pycharm_projects\\AI-chat\\analytics_excel\\store\\store_dashboard.html\")",
+      "Bash(iconv:*)",
+      "Bash(cd /d d:pycharm_projectsAI-chatanalytics_excelstore)",
+      "Bash(cd:*)",
+      "Bash(d:)",
+      "Bash(dir /b \"d:\\pycharm_projects\\AI-chat\\analytics_excel\\store\")",
+      "Bash(powershell -Command \"(Get-Content store_dashboard.html)[5214..5216]\")",
+      "Bash(powershell -Command:*)",
+      "Bash(dir /b \"d:\\pycharm_projects\\AI-chat\\analytics_excel\\store\\charts\\*.py\")",
+      "Bash(ls:*)",
+      "Bash(Select-String -Pattern \"HTML|Вкладок|Графиков\" -CaseSensitive)",
+      "Bash(git pull:*)"
     ]
   }
 }

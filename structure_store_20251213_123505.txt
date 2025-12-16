@@ -1,0 +1,34 @@
+
+📁 Структура проекта: store
+📊 Папок: 4, Файлов: 24, Размер: 8.6MB
+📝 Строк кода: 18,885, TODO: 15, 🔒 Чувствительных: 0
+============================================================
+📁 store/
+├── 📁 .claude/
+│   └── 📋 settings.local.json
+├── 📁 charts/
+│   ├── 🐍 __init__.py
+│   ├── 🐍 base_chart.py
+│   ├── 🐍 chart_config.py
+│   └── 🐍 chart_revenue_dynamics.py
+├── 📁 engine/
+│   ├── 🐍 __init__.py
+│   ├── 🐍 dashboard.py
+│   ├── 🐍 data_processor.py
+│   ├── 🐍 filters.py
+│   └── 🐍 grid_manager.py
+├── 📁 templates/
+│   └── 🌐 dashboard_template.html
+├── 📄 .gitignore
+├── 🐍 archive.py
+├── 🐍 context_builder.py
+├── 📊 final_flat_clean.xlsx
+├── 🐍 main.py
+├── 🐍 project_header.py
+├── 🐍 prompt_loader.py
+├── 📋 prompts.json
+├── 📊 store.xlsx
+├── 📄 store_analytics.ipynb
+├── 🌐 store_dashboard.html
+├── 📝 TODO.md
+└── 🐍 tree_generator_enhanced.py
