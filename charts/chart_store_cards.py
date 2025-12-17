@@ -360,8 +360,7 @@ class ChartStoreCards(BaseChart):
                 return store;
             }});
 
-            // Расчет АППГ из rawData (аналогично chart_small_multiples)
-            const rawData = window.rawData || [];
+            // Расчет АППГ: оба года из уже отфильтрованных данных
             const yearsInFiltered = new Set();
             data.forEach(row => {{
                 const year = row['Год'];
@@ -370,15 +369,10 @@ class ChartStoreCards(BaseChart):
             const currentYear = Math.max(...yearsInFiltered);
             const previousYear = currentYear - 1;
 
-            // Агрегируем выручку прошлого года из rawData для каждого магазина
-            const prevYearRevenue = {{}};
-            rawData.forEach(row => {{
-                const storeName = row['Магазин'];
-                const year = parseInt(row['Год']);
-                if (year === previousYear) {{
-                    if (!prevYearRevenue[storeName]) prevYearRevenue[storeName] = 0;
-                    prevYearRevenue[storeName] += row['Сумма в чеке'] || 0;
-                }}
+            console.log('АППГ расчет:', {{
+                currentYear,
+                previousYear,
+                магазинов: storeList.length
             }});
 
             // Вычисляем медианы для критериев эффективности
@@ -386,10 +380,14 @@ class ChartStoreCards(BaseChart):
 
             // Добавляем сравнения
             storeList.forEach(store => {{
-                // vs АППГ
-                const prevRev = prevYearRevenue[store.name] || 0;
+                // vs АППГ: используем данные из store.revenueByYear (уже отфильтрованные)
                 const currentRev = store.revenueByYear[currentYear] || 0;
-                store.vsAAPG = prevRev > 0 ? ((currentRev - prevRev) / prevRev) * 100 : 0;
+                const prevRev = store.revenueByYear[previousYear] || 0;
+
+                // Формула: (текущий / прошлый - 1) * 100%
+                store.vsAAPG = prevRev > 0 ? ((currentRev / prevRev - 1) * 100) : 0;
+
+                console.log(`${{store.name}}: 2025=${{currentRev}}, 2024=${{prevRev}}, %=${{store.vsAAPG.toFixed(1)}}`);
 
                 // vs медиана
                 store.vsMedian = medians.revenue_per_m2 > 0
