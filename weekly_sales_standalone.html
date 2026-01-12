@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Динамика продаж по неделям</title>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            padding: 24px;
+        }
+        h1 {
+            font-size: 24px;
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            margin-bottom: 20px;
+            padding: 16px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+            align-items: flex-start;
+        }
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .control-group label {
+            font-weight: 500;
+            font-size: 13px;
+            color: #495057;
+        }
+        select, input[type="file"] {
+            padding: 8px 12px;
+            border: 1px solid #ced4da;
+            border-radius: 6px;
+            font-size: 13px;
+            background: white;
+        }
+        select[multiple] {
+            height: 100px;
+            min-width: 160px;
+        }
+        .checkbox-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: center;
+            padding-top: 24px;
+        }
+        .checkbox-group label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            cursor: pointer;
+        }
+        .btn-group {
+            display: flex;
+            gap: 8px;
+            padding-top: 20px;
+        }
+        button {
+            padding: 6px 12px;
+            border: 1px solid #ced4da;
+            border-radius: 6px;
+            background: white;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        button:hover {
+            background: #e9ecef;
+        }
+        button.primary {
+            background: #1f77b4;
+            color: white;
+            border-color: #1f77b4;
+        }
+        button.primary:hover {
+            background: #1a5f8f;
+        }
+        #chart {
+            width: 100%;
+            height: 550px;
+            margin-bottom: 20px;
+        }
+        .table-container {
+            overflow-x: auto;
+            margin-top: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        th, td {
+            padding: 10px 12px;
+            text-align: right;
+            border-bottom: 1px solid #e9ecef;
+        }
+        th {
+            background: #f8f9fa;
+            font-weight: 600;
+            cursor: pointer;
+            user-select: none;
+        }
+        th:hover {
+            background: #e9ecef;
+        }
+        th:first-child, td:first-child {
+            text-align: left;
+        }
+        tr:hover {
+            background: #f8f9fa;
+        }
+        .data-input {
+            margin-bottom: 20px;
+            padding: 16px;
+            background: #e3f2fd;
+            border-radius: 8px;
+        }
+        .data-input h3 {
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+        .data-input textarea {
+            width: 100%;
+            height: 150px;
+            padding: 12px;
+            border: 1px solid #ced4da;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 12px;
+            resize: vertical;
+        }
+        .view-switcher {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+        .view-btn {
+            padding: 8px 16px;
+            border: 1px solid #ced4da;
+            border-radius: 6px;
+            background: white;
+            cursor: pointer;
+        }
+        .view-btn.active {
+            background: #1f77b4;
+            color: white;
+            border-color: #1f77b4;
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Динамика продаж по неделям</h1>
+
+        <!-- Ввод данных -->
+        <div class="data-input">
+            <h3>Вставьте данные (скопируйте из Excel: Магазин | Нед 1 | Нед 2 | ...)</h3>
+            <textarea id="dataInput" placeholder="Магазин	Нед 1	Нед 2	Нед 3	Нед 4
+Магазин 1	125000	142000	158000	165000
+Магазин 2	98000	115000	128000	135000
+Магазин 3	110000	125000	140000	148000"></textarea>
+            <div style="margin-top: 10px;">
+                <button class="primary" onclick="loadDataFromTextarea()">Загрузить данные</button>
+                <button onclick="loadDemoData()">Демо-данные</button>
+            </div>
+        </div>
+
+        <!-- Контролы -->
+        <div class="controls">
+            <div class="control-group">
+                <label>Метрика:</label>
+                <select id="metric" onchange="updateChart()">
+                    <option value="revenue" selected>Выручка</option>
+                    <option value="growth_pct">Рост к пред. неделе (%)</option>
+                    <option value="growth_index">Индекс роста (%)</option>
+                    <option value="cumulative">Кумулятивная сумма</option>
+                    <option value="moving_avg">Скользящее среднее (4 нед)</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label>Недели с:</label>
+                <select id="weekFrom" onchange="updateChart()"></select>
+            </div>
+
+            <div class="control-group">
+                <label>по:</label>
+                <select id="weekTo" onchange="updateChart()"></select>
+            </div>
+
+            <div class="control-group">
+                <label>Магазины:</label>
+                <select id="stores" multiple onchange="updateChart()"></select>
+                <div class="btn-group">
+                    <button onclick="selectAllStores()">Все</button>
+                    <button onclick="clearStores()">Сброс</button>
+                </div>
+            </div>
+
+            <div class="checkbox-group">
+                <label><input type="checkbox" id="showMean" checked onchange="updateChart()"> Средняя</label>
+                <label><input type="checkbox" id="showMedian" onchange="updateChart()"> Медиана</label>
+                <label><input type="checkbox" id="showCorridor" onchange="updateChart()"> Коридор min-max</label>
+                <label><input type="checkbox" id="showTrend" onchange="updateChart()"> Линии тренда</label>
+                <label><input type="checkbox" id="showLabels" onchange="updateChart()"> Значения</label>
+            </div>
+        </div>
+
+        <!-- Переключатель видов -->
+        <div class="view-switcher">
+            <button class="view-btn active" onclick="showView('chart')">График</button>
+            <button class="view-btn" onclick="showView('table')">Таблица</button>
+            <button class="view-btn" onclick="showView('data')">Данные</button>
+        </div>
+
+        <!-- График -->
+        <div id="chart"></div>
+
+        <!-- Таблица -->
+        <div id="tableContainer" class="table-container hidden"></div>
+
+        <!-- Таблица данных -->
+        <div id="dataTable" class="table-container hidden"></div>
+    </div>
+
+    <script>
+        // =====================================================
+        // ГЛОБАЛЬНЫЕ ДАННЫЕ
+        // =====================================================
+        let weeklySalesData = null;
+
+        const COLORS = [
+            '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
+            '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf',
+            '#aec7e8', '#ffbb78', '#98df8a', '#ff9896', '#c5b0d5'
+        ];
+
+        // =====================================================
+        // ЗАГРУЗКА ДАННЫХ
+        // =====================================================
+        function loadDataFromTextarea() {
+            const text = document.getElementById('dataInput').value.trim();
+            if (!text) {
+                alert('Вставьте данные');
+                return;
+            }
+            parseData(text);
+        }
+
+        function parseData(text) {
+            const lines = text.split('\n').filter(l => l.trim());
+            if (lines.length < 2) {
+                alert('Недостаточно данных');
+                return;
+            }
+
+            // Определяем разделитель (табуляция или точка с запятой)
+            const delimiter = lines[0].includes('\t') ? '\t' : ';';
+
+            // Заголовки
+            const headers = lines[0].split(delimiter).map(h => h.trim());
+            const weeks = headers.slice(1);
+
+            // Данные
+            const stores = [];
+            const data = [];
+
+            for (let i = 1; i < lines.length; i++) {
+                const cols = lines[i].split(delimiter).map(c => c.trim());
+                if (cols.length < 2) continue;
+
+                stores.push(cols[0]);
+                const row = cols.slice(1).map(v => {
+                    const num = parseFloat(v.replace(/\s/g, '').replace(',', '.'));
+                    return isNaN(num) ? null : num;
+                });
+                data.push(row);
+            }
+
+            weeklySalesData = { stores, weeks, data };
+            initSelectors();
+            updateChart();
+            showDataTable();
+        }
+
+        function loadDemoData() {
+            const stores = ['Магазин 1', 'Магазин 2', 'Магазин 3', 'Магазин 4', 'Магазин 5', 'Магазин 6', 'Магазин 7', 'Магазин 8'];
+            const weeks = [];
+            const data = [];
+            const maxWeeks = 24;
+
+            for (let w = 1; w <= maxWeeks; w++) {
+                weeks.push(`Нед ${w}`);
+            }
+
+            stores.forEach((store, idx) => {
+                const weeksActive = 8 + Math.floor(Math.random() * 17);
+                const base = 80000 + Math.random() * 70000;
+                const growthRate = 0.02 + Math.random() * 0.06;
+
+                const row = [];
+                for (let w = 0; w < maxWeeks; w++) {
+                    if (w < weeksActive) {
+                        const value = base * Math.pow(1 + growthRate, w);
+                        const noise = 0.85 + Math.random() * 0.3;
+                        row.push(Math.round(value * noise));
+                    } else {
+                        row.push(null);
+                    }
+                }
+                data.push(row);
+            });
+
+            weeklySalesData = { stores, weeks, data };
+            initSelectors();
+            updateChart();
+            showDataTable();
+        }
+
+        // =====================================================
+        // ПРОИЗВОДНЫЕ МЕТРИКИ
+        // =====================================================
+        function calculateMetrics(data) {
+            const growth_pct = data.map(row => {
+                return row.map((val, j) => {
+                    if (j === 0 || val === null || row[j-1] === null || row[j-1] === 0) return null;
+                    return ((val - row[j-1]) / row[j-1]) * 100;
+                });
+            });
+
+            const growth_index = data.map(row => {
+                const firstVal = row.find(v => v !== null && v > 0);
+                if (!firstVal) return row.map(() => null);
+                return row.map(val => val !== null ? (val / firstVal) * 100 : null);
+            });
+
+            const cumulative = data.map(row => {
+                let sum = 0;
+                return row.map(val => {
+                    if (val !== null) sum += val;
+                    return val !== null ? sum : null;
+                });
+            });
+
+            const moving_avg = data.map(row => {
+                return row.map((val, j) => {
+                    if (j < 3) return null;
+                    const window = row.slice(j - 3, j + 1);
+                    if (window.some(v => v === null)) return null;
+                    return window.reduce((a, b) => a + b, 0) / 4;
+                });
+            });
+
+            return { revenue: data, growth_pct, growth_index, cumulative, moving_avg };
+        }
+
+        function getStats(data, indices) {
+            const n = data[0]?.length || 0;
+            const stats = { mean: [], median: [], min: [], max: [] };
+
+            for (let j = 0; j < n; j++) {
+                const values = indices
+                    .map(i => data[i]?.[j])
+                    .filter(v => v !== null && !isNaN(v));
+
+                if (values.length > 0) {
+                    values.sort((a, b) => a - b);
+                    stats.mean.push(values.reduce((a, b) => a + b, 0) / values.length);
+                    stats.median.push(values[Math.floor(values.length / 2)]);
+                    stats.min.push(values[0]);
+                    stats.max.push(values[values.length - 1]);
+                } else {
+                    stats.mean.push(null);
+                    stats.median.push(null);
+                    stats.min.push(null);
+                    stats.max.push(null);
+                }
+            }
+            return stats;
+        }
+
+        function linearRegression(x, y) {
+            const n = x.length;
+            if (n < 2) return null;
+
+            let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+            for (let i = 0; i < n; i++) {
+                sumX += x[i];
+                sumY += y[i];
+                sumXY += x[i] * y[i];
+                sumXX += x[i] * x[i];
+            }
+
+            const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+            const intercept = (sumY - slope * sumX) / n;
+
+            const yMean = sumY / n;
+            let ssRes = 0, ssTot = 0;
+            for (let i = 0; i < n; i++) {
+                ssRes += (y[i] - (slope * x[i] + intercept)) ** 2;
+                ssTot += (y[i] - yMean) ** 2;
+            }
+            const r2 = ssTot > 0 ? 1 - ssRes / ssTot : 0;
+
+            return { slope, intercept, r2 };
+        }
+
+        // =====================================================
+        // СЕЛЕКТОРЫ
+        // =====================================================
+        function initSelectors() {
+            if (!weeklySalesData) return;
+
+            const storesSelect = document.getElementById('stores');
+            const weekFromSelect = document.getElementById('weekFrom');
+            const weekToSelect = document.getElementById('weekTo');
+
+            // Магазины
+            storesSelect.innerHTML = '';
+            weeklySalesData.stores.forEach((store, idx) => {
+                const opt = document.createElement('option');
+                opt.value = idx;
+                opt.textContent = store;
+                opt.selected = idx < 5;
+                storesSelect.appendChild(opt);
+            });
+
+            // Недели
+            weekFromSelect.innerHTML = '';
+            weekToSelect.innerHTML = '';
+            weeklySalesData.weeks.forEach((week, idx) => {
+                const optFrom = document.createElement('option');
+                optFrom.value = idx;
+                optFrom.textContent = week;
+                weekFromSelect.appendChild(optFrom);
+
+                const optTo = document.createElement('option');
+                optTo.value = idx;
+                optTo.textContent = week;
+                weekToSelect.appendChild(optTo);
+            });
+
+            weekFromSelect.value = 0;
+            weekToSelect.value = weeklySalesData.weeks.length - 1;
+        }
+
+        function selectAllStores() {
+            const select = document.getElementById('stores');
+            Array.from(select.options).forEach(o => o.selected = true);
+            updateChart();
+        }
+
+        function clearStores() {
+            const select = document.getElementById('stores');
+            Array.from(select.options).forEach(o => o.selected = false);
+            updateChart();
+        }
+
+        // =====================================================
+        // ПЕРЕКЛЮЧЕНИЕ ВИДОВ
+        // =====================================================
+        function showView(view) {
+            document.querySelectorAll('.view-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+
+            document.getElementById('chart').classList.toggle('hidden', view !== 'chart');
+            document.getElementById('tableContainer').classList.toggle('hidden', view !== 'table');
+            document.getElementById('dataTable').classList.toggle('hidden', view !== 'data');
+
+            if (view === 'table') generateSummaryTable();
+            if (view === 'data') showDataTable();
+        }
+
+        // =====================================================
+        // ГЛАВНАЯ ФУНКЦИЯ - ОБНОВЛЕНИЕ ГРАФИКА
+        // =====================================================
+        function updateChart() {
+            const chartDiv = document.getElementById('chart');
+
+            if (!weeklySalesData) {
+                chartDiv.innerHTML = '<p style="padding: 40px; text-align: center; color: #666;">Загрузите данные или нажмите "Демо-данные"</p>';
+                return;
+            }
+
+            const metric = document.getElementById('metric').value;
+            const weekFrom = parseInt(document.getElementById('weekFrom').value) || 0;
+            const weekTo = parseInt(document.getElementById('weekTo').value) || weeklySalesData.weeks.length - 1;
+            const showMean = document.getElementById('showMean').checked;
+            const showMedian = document.getElementById('showMedian').checked;
+            const showCorridor = document.getElementById('showCorridor').checked;
+            const showTrend = document.getElementById('showTrend').checked;
+            const showLabels = document.getElementById('showLabels').checked;
+
+            const storesSelect = document.getElementById('stores');
+            const selectedIndices = Array.from(storesSelect.selectedOptions).map(o => parseInt(o.value));
+
+            if (selectedIndices.length === 0) {
+                chartDiv.innerHTML = '<p style="padding: 40px; text-align: center; color: #666;">Выберите магазины</p>';
+                return;
+            }
+
+            const metrics = calculateMetrics(weeklySalesData.data);
+            const metricData = metrics[metric];
+
+            const metricLabels = {
+                'revenue': 'Выручка',
+                'growth_pct': 'Рост к пред. неделе (%)',
+                'growth_index': 'Индекс роста (%)',
+                'cumulative': 'Кумулятивная сумма',
+                'moving_avg': 'Скользящее среднее (4 нед)'
+            };
+            const metricLabel = metricLabels[metric];
+
+            const weekIndices = [];
+            for (let i = weekFrom; i <= weekTo; i++) weekIndices.push(i);
+            const xValues = weekIndices.map(i => i + 1);
+
+            const traces = [];
+            const annotations = [];
+
+            // Коридор min-max
+            if (showCorridor) {
+                const stats = getStats(metricData, selectedIndices);
+                const minVals = weekIndices.map(i => stats.min[i]);
+                const maxVals = weekIndices.map(i => stats.max[i]);
+
+                traces.push({
+                    x: xValues.concat([...xValues].reverse()),
+                    y: maxVals.concat([...minVals].reverse()),
+                    fill: 'toself',
+                    fillcolor: 'rgba(128, 128, 128, 0.15)',
+                    line: { color: 'rgba(128, 128, 128, 0)' },
+                    name: 'Коридор min-max',
+                    hoverinfo: 'skip'
+                });
+            }
+
+            // Линии магазинов
+            selectedIndices.forEach((storeIdx, i) => {
+                const storeName = weeklySalesData.stores[storeIdx];
+                const yValues = weekIndices.map(j => metricData[storeIdx]?.[j]);
+                const color = COLORS[i % COLORS.length];
+
+                traces.push({
+                    x: xValues,
+                    y: yValues,
+                    mode: 'lines+markers',
+                    name: storeName,
+                    line: { color: color, width: 2 },
+                    marker: { size: 6 },
+                    hovertemplate: `<b>${storeName}</b><br>Неделя: %{x}<br>${metricLabel}: %{y:,.0f}<extra></extra>`
+                });
+
+                // Тренд
+                if (showTrend) {
+                    const validPoints = [];
+                    yValues.forEach((y, j) => {
+                        if (y !== null && !isNaN(y)) {
+                            validPoints.push({ x: xValues[j], y: y });
+                        }
+                    });
+
+                    if (validPoints.length >= 2) {
+                        const xArr = validPoints.map(p => p.x);
+                        const yArr = validPoints.map(p => p.y);
+                        const reg = linearRegression(xArr, yArr);
+
+                        if (reg) {
+                            traces.push({
+                                x: xArr,
+                                y: xArr.map(x => reg.slope * x + reg.intercept),
+                                mode: 'lines',
+                                name: `${storeName} (тренд)`,
+                                line: { color: color, width: 1, dash: 'dot' },
+                                showlegend: false,
+                                hovertemplate: `<b>${storeName} - Тренд</b><br>R²: ${reg.r2.toFixed(2)}<extra></extra>`
+                            });
+                        }
+                    }
+                }
+
+                // Подписи
+                if (showLabels) {
+                    yValues.forEach((y, j) => {
+                        if (y !== null && !isNaN(y)) {
+                            annotations.push({
+                                x: xValues[j],
+                                y: y,
+                                text: Math.round(y).toLocaleString('ru-RU'),
+                                showarrow: false,
+                                font: { size: 8, color: color },
+                                yshift: 10
+                            });
+                        }
+                    });
+                }
+            });
+
+            // Средняя
+            if (showMean) {
+                const stats = getStats(metricData, selectedIndices);
+                traces.push({
+                    x: xValues,
+                    y: weekIndices.map(i => stats.mean[i]),
+                    mode: 'lines',
+                    name: 'Средняя',
+                    line: { color: '#000000', width: 3, dash: 'dash' },
+                    hovertemplate: `<b>Средняя</b><br>Неделя: %{x}<br>${metricLabel}: %{y:,.0f}<extra></extra>`
+                });
+            }
+
+            // Медиана
+            if (showMedian) {
+                const stats = getStats(metricData, selectedIndices);
+                traces.push({
+                    x: xValues,
+                    y: weekIndices.map(i => stats.median[i]),
+                    mode: 'lines',
+                    name: 'Медиана',
+                    line: { color: '#E91E63', width: 2, dash: 'dot' },
+                    hovertemplate: `<b>Медиана</b><br>Неделя: %{x}<br>${metricLabel}: %{y:,.0f}<extra></extra>`
+                });
+            }
+
+            const layout = {
+                title: {
+                    text: `Динамика продаж по неделям: ${metricLabel}`,
+                    font: { size: 18 }
+                },
+                xaxis: {
+                    title: 'Неделя работы',
+                    dtick: xValues.length <= 24 ? 1 : Math.ceil(xValues.length / 12),
+                    gridcolor: '#e9ecef'
+                },
+                yaxis: {
+                    title: metricLabel,
+                    gridcolor: '#e9ecef',
+                    tickformat: ',.0f'
+                },
+                plot_bgcolor: '#f8f9fa',
+                paper_bgcolor: 'white',
+                margin: { l: 80, r: 200, t: 60, b: 60 },
+                showlegend: true,
+                legend: {
+                    x: 1.02,
+                    y: 1,
+                    xanchor: 'left',
+                    font: { size: 11 }
+                },
+                hovermode: 'x unified',
+                annotations: annotations
+            };
+
+            Plotly.react('chart', traces, layout, { responsive: true });
+        }
+
+        // =====================================================
+        // ТАБЛИЦЫ
+        // =====================================================
+        function generateSummaryTable() {
+            if (!weeklySalesData) return;
+
+            const storesSelect = document.getElementById('stores');
+            const selectedIndices = Array.from(storesSelect.selectedOptions).map(o => parseInt(o.value));
+
+            let html = '<table><thead><tr>';
+            html += '<th>Магазин</th><th>Недель</th><th>Выручка (1 нед)</th><th>Выручка (посл.)</th><th>Рост (%)</th><th>Всего</th>';
+            html += '</tr></thead><tbody>';
+
+            selectedIndices.forEach(idx => {
+                const store = weeklySalesData.stores[idx];
+                const revenue = weeklySalesData.data[idx];
+                const valid = revenue.filter(v => v !== null);
+                const first = valid[0] || 0;
+                const last = valid[valid.length - 1] || 0;
+                const growth = first > 0 ? Math.round((last / first - 1) * 100) : 0;
+                const total = valid.reduce((a, b) => a + b, 0);
+
+                html += `<tr>
+                    <td>${store}</td>
+                    <td>${valid.length}</td>
+                    <td>${first.toLocaleString('ru-RU')}</td>
+                    <td>${last.toLocaleString('ru-RU')}</td>
+                    <td style="color: ${growth >= 0 ? 'green' : 'red'}">${growth > 0 ? '+' : ''}${growth}%</td>
+                    <td>${total.toLocaleString('ru-RU')}</td>
+                </tr>`;
+            });
+
+            html += '</tbody></table>';
+            document.getElementById('tableContainer').innerHTML = html;
+        }
+
+        function showDataTable() {
+            if (!weeklySalesData) return;
+
+            let html = '<table><thead><tr><th>Магазин</th>';
+            weeklySalesData.weeks.forEach(w => html += `<th>${w}</th>`);
+            html += '</tr></thead><tbody>';
+
+            weeklySalesData.stores.forEach((store, idx) => {
+                html += `<tr><td>${store}</td>`;
+                weeklySalesData.data[idx].forEach(val => {
+                    html += `<td>${val !== null ? val.toLocaleString('ru-RU') : '-'}</td>`;
+                });
+                html += '</tr>';
+            });
+
+            html += '</tbody></table>';
+            document.getElementById('dataTable').innerHTML = html;
+        }
+
+        // Инициализация
+        document.addEventListener('DOMContentLoaded', function() {
+            updateChart();
+        });
+    </script>
+</body>
+</html>
